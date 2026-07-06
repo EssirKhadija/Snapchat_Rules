@@ -1,0 +1,178 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String             @id @default(cuid())
+  email              String             @unique
+  passwordHash       String             @map("password_hash")
+  fullName           String?
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  refreshTokens      RefreshToken[]
+  snapchatAccount    SnapchatAccount?
+  rules              Rule[]
+  ruleExecutionLogs  RuleExecutionLog[]
+  settings           UserSettings?
+
+  @@map("users")
+}
+
+model SnapchatAccount {
+  id                    String   @id @default(cuid())
+  userId                String   @unique @map("user_id")
+  externalAccountId     String   @map("external_account_id") @db.VarChar(128)
+  displayName           String   @map("display_name")
+  accessTokenEncrypted  String   @map("access_token_encrypted")
+  refreshTokenEncrypted String   @map("refresh_token_encrypted")
+  tokenExpiresAt        DateTime @map("token_expires_at")
+  status                String   @default("CONNECTED")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaigns             Campaign[]
+
+  @@map("snapchat_accounts")
+}
+
+model Campaign {
+  id                  String   @id @default(cuid())
+  snapchatAccountId   String   @map("snapchat_account_id")
+  externalCampaignId  String   @map("external_campaign_id") @db.VarChar(128)
+  name                String
+  status              String
+  dailyBudget         Float?
+  spent               Float   @default(0)
+  impressions         Int     @default(0)
+  clicks              Int     @default(0)
+  ctr                 Float?
+  cpc                 Float?
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  snapchatAccount     SnapchatAccount @relation(fields: [snapchatAccountId], references: [id], onDelete: Cascade)
+  adSquads            AdSquad[]
+  ads                 Ad[]
+
+  @@unique([snapchatAccountId, externalCampaignId], name: "campaign_external_unique")
+  @@map("campaigns")
+}
+
+model AdSquad {
+  id                 String   @id @default(cuid())
+  campaignId         String   @map("campaign_id")
+  externalAdSquadId  String   @map("external_ad_squad_id") @db.VarChar(128)
+  name               String
+  status             String
+  dailyBudget        Float?
+  spent              Float   @default(0)
+  impressions        Int     @default(0)
+  clicks             Int     @default(0)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  campaign           Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  ads                Ad[]
+
+  @@unique([campaignId, externalAdSquadId], name: "ad_squad_external_unique")
+  @@map("ad_squads")
+}
+
+model Ad {
+  id              String   @id @default(cuid())
+  campaignId      String   @map("campaign_id")
+  adSquadId       String   @map("ad_squad_id")
+  externalAdId    String   @map("external_ad_id") @db.VarChar(128)
+  name            String
+  status          String
+  spent           Float   @default(0)
+  impressions     Int     @default(0)
+  clicks          Int     @default(0)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  campaign        Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  adSquad         AdSquad  @relation(fields: [adSquadId], references: [id], onDelete: Cascade)
+
+  @@unique([adSquadId, externalAdId], name: "ad_external_unique")
+  @@map("ads")
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  token      String   @unique
+  userId     String   @map("user_id")
+  revoked    Boolean  @default(false)
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Rule {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  name           String
+  description    String?  @db.Text
+  enabled        Boolean  @default(true)
+  priority       Int      @default(0)
+  cooldownMinutes Int     @default(0) @map("cooldown_minutes")
+  lastExecutedAt DateTime? @map("last_executed_at")
+  conditions     Json
+  actions        Json
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executionLogs  RuleExecutionLog[]
+
+  @@map("rules")
+}
+
+model RuleExecutionLog {
+  id          String   @id @default(cuid())
+  ruleId      String   @map("rule_id")
+  userId      String   @map("user_id")
+  targetType  String   @map("target_type")
+  targetId    String   @map("target_id")
+  targetName  String   @map("target_name")
+  simulated   Boolean  @default(false)
+  matched     Boolean
+  actions     Json
+  result      Json
+  executedAt  DateTime @default(now()) @map("executed_at")
+  durationMs  Int      @map("duration_ms")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  rule        Rule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("rule_execution_logs")
+}
+
+model UserSettings {
+  id                 String   @id @default(cuid())
+  userId             String   @unique @map("user_id")
+  timezone           String   @default("UTC")
+  currency           String   @default("USD")
+  language           String   @default("en")
+  inAppNotifications Boolean  @default(true) @map("in_app_notifications")
+  emailNotifications Boolean  @default(true) @map("email_notifications")
+  webhookNotifications Boolean @default(false) @map("webhook_notifications")
+  schedulerFrequency String   @default("* * * * *") @map("scheduler_frequency")
+  appName            String   @default("SnapRules") @map("app_name")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
