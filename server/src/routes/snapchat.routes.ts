@@ -16,7 +16,6 @@ const router = Router();
  *         description: Authorization URL
  */
 router.get('/authorize', authenticate, SnapchatController.authorize);
-
 /**
  * @openapi
  * /snapchat/callback:
@@ -36,8 +35,7 @@ router.get('/authorize', authenticate, SnapchatController.authorize);
  *       200:
  *         description: Snapchat account connected
  */
-router.get('/callback', authenticate, SnapchatController.callback);
-
+router.get('/callback', SnapchatController.callback);
 /**
  * @openapi
  * /snapchat/refresh:

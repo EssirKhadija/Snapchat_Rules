@@ -9,14 +9,14 @@ import {
 } from '../config';
 
 const AUTH_URL = 'https://accounts.snapchat.com/login/oauth2/authorize';
-const TOKEN_URL = 'https://accounts.snapchat.com/login/oauth2/token';
+const TOKEN_URL = 'https://accounts.snapchat.com/login/oauth2/access_token';
 
 export function getAuthorizationUrl(state: string) {
   const query = qs.stringify({
     client_id: SNAPCHAT_CLIENT_ID,
     redirect_uri: SNAPCHAT_REDIRECT_URI,
     response_type: 'code',
-    scope: 'ads_api',
+    scope: 'snapchat-marketing-api',
     state
   });
   return `${AUTH_URL}?${query}`;
@@ -31,17 +31,21 @@ export async function exchangeCodeForTokens(code: string) {
     redirect_uri: SNAPCHAT_REDIRECT_URI
   });
 
-  const response = await axios.post(TOKEN_URL, payload, {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-  });
+  try {
+    const response = await axios.post(TOKEN_URL, payload, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
 
-  return response.data as {
-    access_token: string;
-    refresh_token: string;
-    expires_in: number;
-    account_id: string;
-    account_name?: string;
-  };
+    return response.data;
+
+  } catch (error: any) {
+    console.log("========== SNAPCHAT ERROR ==========");
+    console.log(error.response?.status);
+    console.log(error.response?.data);
+    throw error;
+  }
 }
 
 export async function refreshSnapchatToken(accountId: string) {

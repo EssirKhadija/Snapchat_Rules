@@ -11,19 +11,34 @@ import logger from '../utils/logger';
 
 export async function authorize(req: Request, res: Response, next: NextFunction) {
   try {
-    const state = req.query.state?.toString() || 'default';
+    const state = req.query.state?.toString() || (req as any).userId;
+    if (!state) {
+      return res.status(400).json({ message: 'Missing state' });
+    }
     const url = getAuthorizationUrl(state);
-    res.json({ url });
-  } catch (error) {
-    logger.error('Snapchat authorize error', { error });
-    next(error);
+    return res.json({ url });
+  } catch (error: any) {
+    console.error('========== CALLBACK ERROR ==========');
+    console.error(error.response?.status);
+    console.error(error.response?.data);
+    console.error(error);
+
+    return res.status(500).json({
+      message: error.response?.data || error.message,
+    });
   }
 }
 
 export async function callback(req: Request, res: Response, next: NextFunction) {
   try {
     const code = req.query.code?.toString();
-    const userId = (req as any).userId;
+    const userId = req.query.state as string;
+
+if (!userId) {
+    return res.status(400).json({
+        message: "Missing userId"
+    });
+}
     if (!code) return res.status(400).json({ message: 'Missing authorization code' });
     const tokens = await exchangeCodeForTokens(code);
     await connectSnapchat(userId, tokens);

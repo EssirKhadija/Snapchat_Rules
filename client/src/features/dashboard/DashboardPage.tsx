@@ -1,47 +1,80 @@
 import { useMemo } from 'react';
-import { DashboardOverview, ExecutionItem, NotificationItem } from './dashboard.types';
-
-const demoOverview: DashboardOverview = {
-  campaignCount: 28,
-  activeCampaigns: 18,
-  pausedCampaigns: 10,
-  spend: 15423.45,
-  ctr: 1.95,
-  cpm: 7.83,
-  cpa: 24.67,
-  roas: 3.4
-};
+import { useQuery } from '@tanstack/react-query';
+import { fetchDashboardStats, fetchSnapchatAccount, getSnapchatAuthorizeUrl } from './dashboard.service';
+import { DashboardStatsResponse, SnapchatAccountResponse } from './dashboard.service';
+import { ExecutionItem, NotificationItem } from './dashboard.types';
 
 const demoExecutions: ExecutionItem[] = [
-  { id: 'exec-001', ruleName: 'Augmenter budget CPC faible', status: 'SUCCEEDED', message: 'Budget augmentÃ© de 15%', executedAt: '2026-06-25 15:23' },
+  { id: 'exec-001', ruleName: 'Augmenter budget CPC faible', status: 'SUCCEEDED', message: 'Budget augmenté de 15%', executedAt: '2026-06-25 15:23' },
   { id: 'exec-002', ruleName: 'Pause campagne test', status: 'FAILED', message: 'API Snapchat non disponible', executedAt: '2026-06-25 14:50' },
-  { id: 'exec-003', ruleName: 'RÃ©duction budget conversion', status: 'SKIPPED', message: 'Condition non remplie', executedAt: '2026-06-25 13:30' }
+  { id: 'exec-003', ruleName: 'Réduction budget conversion', status: 'SKIPPED', message: 'Condition non remplie', executedAt: '2026-06-25 13:30' }
 ];
 
 const demoNotifications: NotificationItem[] = [
-  { id: 'notif-001', title: 'Connexion Snapchat rÃ©ussie', message: 'Votre compte Snapchat a Ã©tÃ© connectÃ© avec succÃ¨s.', read: true, createdAt: '2026-06-25 12:10' },
-  { id: 'notif-002', title: 'RÃ¨gle exÃ©cutÃ©e', message: 'La rÃ¨gle "Pause campagne test" a Ã©chouÃ©.', read: false, createdAt: '2026-06-25 14:50' },
-  { id: 'notif-003', title: 'Campagne synchronisÃ©e', message: 'Les donnÃ©es des campagnes ont Ã©tÃ© mises Ã  jour.', read: false, createdAt: '2026-06-25 15:00' }
-];
-
-const metricCards = [
-  { label: 'Campagnes',  value: demoOverview.campaignCount,              sub: `${demoOverview.activeCampaigns} actives`,  accent: true  },
-  { label: 'En pause',   value: demoOverview.pausedCampaigns,             sub: 'Campagnes en pause',                       accent: false },
-  { label: 'DÃ©penses',   value: `â‚¬${demoOverview.spend.toLocaleString()}`, sub: 'Total des dÃ©penses',                      accent: false },
-  { label: 'CTR',        value: `${demoOverview.ctr}%`,                   sub: 'Taux de clics',                            accent: false },
-  { label: 'CPM',        value: `â‚¬${demoOverview.cpm.toFixed(2)}`,        sub: 'CoÃ»t pour mille',                          accent: false },
-  { label: 'CPA',        value: `â‚¬${demoOverview.cpa.toFixed(2)}`,        sub: 'CoÃ»t par acquisition',                     accent: false },
-  { label: 'ROAS',       value: `${demoOverview.roas.toFixed(1)}x`,       sub: 'Retour sur dÃ©penses',                      accent: false },
+  { id: 'notif-001', title: 'Connexion Snapchat réussie', message: 'Votre compte Snapchat a été connecté avec succès.', read: true, createdAt: '2026-06-25 12:10' },
+  { id: 'notif-002', title: 'Règle exécutée', message: 'La règle "Pause campagne test" a échoué.', read: false, createdAt: '2026-06-25 14:50' },
+  { id: 'notif-003', title: 'Campagne synchronisée', message: 'Les données des campagnes ont été mises à jour.', read: false, createdAt: '2026-06-25 15:00' }
 ];
 
 const statusConfig: Record<string, { label: string; classes: string }> = {
-  SUCCEEDED: { label: 'SuccÃ¨s',  classes: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
-  FAILED:    { label: 'Ã‰chec',   classes: 'bg-red-50 text-red-600 border border-red-200'             },
-  SKIPPED:   { label: 'IgnorÃ©',  classes: 'bg-snap-soft text-snap-muted border border-snap-border'   },
+  SUCCEEDED: { label: 'Succès', classes: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+  FAILED: { label: 'Échec', classes: 'bg-red-50 text-red-600 border border-red-200' },
+  SKIPPED: { label: 'Ignoré', classes: 'bg-snap-soft text-snap-muted border border-snap-border' },
 };
 
 const DashboardPage = () => {
-  const stats = useMemo(() => metricCards, []);
+  const { data: stats, error: statsError } = useQuery<DashboardStatsResponse>({
+    queryKey: ['dashboard', 'stats'],
+    queryFn: fetchDashboardStats,
+    staleTime: 1000 * 60,
+    retry: false
+  });
+
+  const { data: account, isLoading: isAccountLoading } = useQuery<SnapchatAccountResponse>({
+    queryKey: ['snapchat', 'me'],
+    queryFn: fetchSnapchatAccount,
+    staleTime: 1000 * 60,
+    retry: false
+  });
+
+  const onConnectSnapchat = async () => {
+    try {
+      const url = await getSnapchatAuthorizeUrl();
+      if (!url) {
+        throw new Error('Authorization URL not returned from server');
+      }
+      window.location.assign(url);
+    } catch (error) {
+      console.error('Unable to fetch Snapchat authorization URL', error);
+      alert('Impossible de lancer l’autorisation Snapchat. Vérifiez votre connexion ou rechargez la page.');
+    }
+  };
+
+  const metricCards = useMemo(() => {
+    if (!stats) {
+      return [
+        { label: 'Campagnes', value: '—', sub: 'Chargement...', accent: true },
+        { label: 'En pause', value: '—', sub: 'Chargement...', accent: false },
+        { label: 'Dépenses', value: '—', sub: 'Chargement...', accent: false },
+        { label: 'CTR', value: '—', sub: 'Chargement...', accent: false },
+        { label: 'CPM', value: '—', sub: 'Chargement...', accent: false },
+        { label: 'CPA', value: '—', sub: 'Chargement...', accent: false },
+        { label: 'ROAS', value: '—', sub: 'Chargement...', accent: false }
+      ];
+    }
+
+    return [
+      { label: 'Campagnes', value: stats.campaignCount, sub: `${stats.activeCampaigns} actives`, accent: true },
+      { label: 'En pause', value: stats.pausedCampaigns, sub: 'Campagnes en pause', accent: false },
+      { label: 'Dépenses', value: `€${stats.spend.toLocaleString()}`, sub: 'Total des dépenses', accent: false },
+      { label: 'CTR', value: `${stats.ctr}%`, sub: 'Taux de clics', accent: false },
+      { label: 'CPM', value: `€${stats.cpm.toFixed(2)}`, sub: 'Coût pour mille', accent: false },
+      { label: 'CPA', value: `€${stats.cpa.toFixed(2)}`, sub: 'Coût par acquisition', accent: false },
+      { label: 'ROAS', value: `${stats.roas.toFixed(1)}x`, sub: 'Retour sur dépenses', accent: false }
+    ];
+  }, [stats]);
+
+  const isConnected = Boolean(account?.externalAccountId);
 
   return (
     <div className="space-y-5">
@@ -51,15 +84,39 @@ const DashboardPage = () => {
             <h1 className="text-xl font-semibold text-snap-ink">Tableau de bord</h1>
             <p className="mt-1 text-sm text-snap-muted">Vue d'ensemble des performances Snapchat Ads.</p>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-xl border border-snap-border bg-snap-soft px-3 py-1.5 text-xs text-snap-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Synchro. il y a 5 min
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="inline-flex items-center gap-2 rounded-xl border border-snap-border bg-snap-soft px-3 py-1.5 text-xs text-snap-muted">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Synchro. il y a 5 min
+            </div>
+            {isAccountLoading ? (
+              <div className="rounded-xl border border-snap-border bg-snap-soft px-4 py-2 text-xs text-snap-muted">Chargement compte...</div>
+            ) : isConnected ? (
+              <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                Connecté
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={onConnectSnapchat}
+                className="rounded-xl border border-snap-border bg-snap-soft px-4 py-2 text-xs font-semibold text-snap-ink transition-colors hover:border-snap-muted"
+              >
+                Connecter Snapchat
+              </button>
+            )}
           </div>
         </div>
       </header>
 
+      {statsError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Impossible de charger les statistiques Snapchat. Vérifiez votre connexion ou reconnectez votre compte.
+        </div>
+      )}
+
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map(card => (
+        {metricCards.map(card => (
           <article
             key={card.label}
             className={`rounded-2xl border p-5 transition-all duration-150 hover:border-snap-muted ${
@@ -81,11 +138,11 @@ const DashboardPage = () => {
         <div className="rounded-2xl border border-snap-border bg-snap-card p-5">
           <div className="mb-5 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-snap-ink">ExÃ©cutions rÃ©centes</h2>
-              <p className="mt-0.5 text-xs text-snap-muted">Historique des derniÃ¨res rÃ¨gles automatisÃ©es.</p>
+              <h2 className="text-base font-semibold text-snap-ink">Exécutions récentes</h2>
+              <p className="mt-0.5 text-xs text-snap-muted">Historique des dernières règles automatisées.</p>
             </div>
             <span className="rounded-xl border border-snap-border bg-snap-soft px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-snap-muted">
-              3 Ã©lÃ©ments
+              {demoExecutions.length} éléments
             </span>
           </div>
           <div className="space-y-3">
@@ -116,7 +173,7 @@ const DashboardPage = () => {
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-semibold text-snap-ink">Notifications</h2>
-                <p className="mt-0.5 text-xs text-snap-muted">Alertes et mises Ã  jour.</p>
+                <p className="mt-0.5 text-xs text-snap-muted">Alertes et mises à jour.</p>
               </div>
               <span className="rounded-lg bg-yellow-100 px-2 py-1 text-[10px] font-semibold text-yellow-700">
                 {demoNotifications.filter(n => !n.read).length} new
@@ -145,11 +202,11 @@ const DashboardPage = () => {
           </div>
 
           <div className="rounded-2xl border border-snap-border bg-snap-card p-5">
-            <h2 className="text-base font-semibold text-snap-ink">RÃ©sumÃ© rapide</h2>
+            <h2 className="text-base font-semibold text-snap-ink">Résumé rapide</h2>
             <ul className="mt-4 space-y-3">
               <li className="flex items-center gap-3 text-xs text-snap-muted">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
-                Toutes les rÃ¨gles sont actives.
+                Toutes les règles sont actives.
               </li>
               <li className="flex items-center gap-3 text-xs text-snap-muted">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
@@ -168,3 +225,4 @@ const DashboardPage = () => {
 };
 
 export default DashboardPage;
+
