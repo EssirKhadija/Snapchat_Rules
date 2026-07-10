@@ -91,30 +91,53 @@ export async function disconnectSnapchat(userId: string) {
 export async function connectSnapchat(userId: string, tokens: { access_token: string; refresh_token: string; expires_in: number; account_id: string; account_name?: string; }) {
   if (!tokens) throw new Error('Missing tokens in Snapchat token response');
 
-  // If Snapchat token response does not include account_id, try fetching it from the API using the access token
-  if (!tokens.account_id) {
-    try {
-      const meResp = await axios.get('https://adsapi.snapchat.com/v1/me', {
-        headers: { Authorization: `Bearer ${tokens.access_token}` }
-      });
+  // Helper: try to extract account id from token response or by calling Snapchat Marketing APIs
+  async function resolveAccountId(toks: { access_token: string; refresh_token?: string; expires_in?: number; account_id?: string; account_name?: string; }) {
+    // 1) direct fields
+    if (toks.account_id) return toks.account_id;
+    // common alternative names
+    // @ts-ignore
+    if ((toks as any).advertiser_id) return (toks as any).advertiser_id;
 
-      // Try a few common response shapes to extract an advertiser/account id
-      const data = meResp.data || {};
-      const advertisers = data.advertisers || data.data?.advertisers || data.data?.advertiser || null;
-      if (Array.isArray(advertisers) && advertisers.length > 0) {
-        tokens.account_id = (advertisers[0].id || advertisers[0].advertiser_id || advertisers[0].account_id)?.toString();
-      } else if (data.account_id || data.data?.account_id) {
-        tokens.account_id = (data.account_id || data.data.account_id).toString();
+    const client = axios.create({ baseURL: 'https://adsapi.snapchat.com', headers: { Authorization: `Bearer ${toks.access_token}` }, timeout: 5000 });
+
+    // Try endpoints in order and attempt to parse common shapes
+    const endpoints = ['/v1/me', '/v1/advertisers', '/v1/ad_accounts', '/v1/adaccounts', '/v1/advertiser'];
+    for (const ep of endpoints) {
+      try {
+        const resp = await client.get(ep);
+        const body = resp.data || {};
+
+        // try multiple possible shapes
+        if (body.advertisers && Array.isArray(body.advertisers) && body.advertisers.length > 0) {
+          const a = body.advertisers[0];
+          return (a.id || a.advertiser_id || a.account_id || a.ad_account_id)?.toString();
+        }
+
+        if (body.data && Array.isArray(body.data) && body.data.length > 0) {
+          const a = body.data[0];
+          return (a.id || a.advertiser_id || a.account_id)?.toString();
+        }
+
+        if (body.account_id) return body.account_id.toString();
+        if (body.advertiser_id) return body.advertiser_id.toString();
+        if (body.id) return body.id.toString();
+      } catch (err: any) {
+        // continue to next endpoint, but log minimal info for debugging
+        console.warn(`Snapchat: ${ep} failed:`, err?.response?.status || err.message);
       }
-    } catch (err: any) {
-      // ignore; we'll throw below if still missing
-      console.warn('Unable to fetch Snapchat /me to determine account_id', err?.response?.data || err.message);
     }
+
+    return undefined;
   }
 
-  if (!tokens.account_id) {
+  const resolved = await resolveAccountId(tokens);
+  if (!resolved) {
+    console.error('Snapchat: unable to determine account_id from token response or API; token response keys:', Object.keys(tokens));
     throw new Error('Missing account_id in Snapchat token response');
   }
+
+  tokens.account_id = resolved;
 
   const encryptedAccess = encrypt(tokens.access_token);
   const encryptedRefresh = encrypt(tokens.refresh_token);
