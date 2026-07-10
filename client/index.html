@@ -7,6 +7,16 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function(){
+        try {
+          if ((location.hostname === 'localhost' || location.hostname === '127.0.0.1') && !localStorage.getItem('accessToken')) {
+            localStorage.setItem('accessToken', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0LXVzZXIiLCJpYXQiOjE3ODM2ODYyNjcsImV4cCI6MTc4MzY4NzE2N30.FsRqPT26DcO_xXGjSWqya0h5PZS-APC6gXYpgcsV8n4');
+            console.log('Dev access token set for local testing');
+          }
+        } catch(e){}
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
