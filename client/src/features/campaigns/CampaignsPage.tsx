@@ -16,13 +16,12 @@ const defaultQuery: CampaignQuery = {
 };
 
 const statusConfig: Record<string, { label: string; dot: string; badge: string }> = {
-  ACTIVE:   { label: 'Active',    dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  PAUSED:   { label: 'En pause',  dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 border-amber-200'       },
-  ARCHIVED: { label: 'Archivée',  dot: 'bg-snap-muted',  badge: 'bg-snap-soft text-snap-muted border-snap-border'   },
-  DRAFT:    { label: 'Brouillon', dot: 'bg-blue-400',    badge: 'bg-blue-50 text-blue-700 border-blue-200'          },
+  ACTIVE:   { label: 'Active',   dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  PAUSED:   { label: 'Paused',   dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 border-amber-200'       },
+  ARCHIVED: { label: 'Archived', dot: 'bg-snap-muted',  badge: 'bg-snap-soft text-snap-muted border-snap-border'   },
+  DRAFT:    { label: 'Draft',    dot: 'bg-blue-400',    badge: 'bg-blue-50 text-blue-700 border-blue-200'          },
 };
 
-// ── Petite ligne de statut avec badge ──────────────────────────
 const StatusBadge = ({ status }: { status: string }) => {
   const s = statusConfig[status] ?? statusConfig.ARCHIVED;
   return (
@@ -33,8 +32,13 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-// ── Ligne Ad ────────────────────────────────────────────────────
-const AdRow = ({ ad, onCreateRule }: { ad: Ad; onCreateRule: (target: { type: 'ad'; id: string; name: string }) => void }) => (
+const AdRow = ({
+  ad,
+  onCreateRule,
+}: {
+  ad: Ad;
+  onCreateRule: (target: { type: 'ad'; id: string; name: string }) => void;
+}) => (
   <div className="flex items-center justify-between gap-3 rounded-xl border border-snap-border bg-white px-4 py-2.5 transition-colors hover:border-snap-muted">
     <div className="flex items-center gap-3 min-w-0">
       <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-snap-border bg-snap-bg">
@@ -57,7 +61,6 @@ const AdRow = ({ ad, onCreateRule }: { ad: Ad; onCreateRule: (target: { type: 'a
   </div>
 );
 
-// ── Ligne Ad Squad avec expand ads ─────────────────────────────
 const AdSquadRow = ({
   squad,
   onCreateRule,
@@ -91,8 +94,8 @@ const AdSquadRow = ({
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-snap-ink">{squad.name}</p>
             <p className="text-xs text-snap-muted">
-              {squad.dailyBudget ? `$${squad.dailyBudget.toFixed(2)}/j` : t('campaigns.budget.undefined')}
-              {squad.bidAmount ? ` · Enchère $${squad.bidAmount.toFixed(2)}` : ''}
+              {squad.dailyBudget ? `$${squad.dailyBudget.toFixed(2)}/day` : t('campaigns.budget.none')}
+              {squad.bidAmount ? ` · Bid $${squad.bidAmount.toFixed(2)}` : ''}
             </p>
           </div>
         </div>
@@ -102,16 +105,15 @@ const AdSquadRow = ({
             onClick={() => onCreateRule({ type: 'adsquad', id: squad.id, name: squad.name })}
             className="flex items-center gap-1.5 rounded-xl border border-snap-yellow/40 bg-snap-yellow/10 px-3 py-1.5 text-[11px] font-semibold text-yellow-700 hover:bg-snap-yellow/20 transition-all"
           >
-            {t('campaigns.rule.adsetButton')}
+            {t('campaigns.rule')}
           </button>
         </div>
       </div>
 
-      {/* Ads expandables */}
       {expanded && (
         <div className="border-t border-snap-border/50 px-4 pb-3 pt-3">
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-snap-muted">
-            {t('campaigns.adsets.title')} ({isLoading ? '...' : ads.length})
+            Ads ({isLoading ? '...' : ads.length})
           </p>
           {isLoading ? (
             <div className="space-y-1.5">
@@ -132,7 +134,6 @@ const AdSquadRow = ({
   );
 };
 
-// ── Ligne Campagne avec expand ──────────────────────────────────
 const CampaignRow = ({
   campaign,
   isExpanded,
@@ -153,7 +154,6 @@ const CampaignRow = ({
 
   return (
     <div className={`rounded-2xl border transition-all duration-200 ${isExpanded ? 'border-snap-yellow/30 bg-snap-yellow/5' : 'border-snap-border bg-snap-card'}`}>
-      {/* Header campagne */}
       <div className="flex items-center gap-3 p-4">
         <button
           onClick={onToggle}
@@ -166,8 +166,8 @@ const CampaignRow = ({
         <div className="flex-1 min-w-0">
           <p className="truncate text-sm font-semibold text-snap-ink">{campaign.name}</p>
           <p className="mt-0.5 text-xs text-snap-muted">
-            {campaign.objective ?? t('campaigns.objective.undefined')}
-            {campaign.dailyBudget ? ` · $${campaign.dailyBudget.toFixed(0)}/j` : ''}
+            {campaign.objective ?? t('campaigns.objective.none')}
+            {campaign.dailyBudget ? ` · $${campaign.dailyBudget.toFixed(0)}/day` : ''}
           </p>
         </div>
 
@@ -177,16 +177,15 @@ const CampaignRow = ({
             onClick={() => onCreateRule({ type: 'campaign', id: campaign.id, name: campaign.name })}
             className="flex items-center gap-1.5 rounded-xl bg-snap-yellow px-3 py-1.5 text-[11px] font-semibold text-snap-ink hover:brightness-105 transition-all"
           >
-            {t('campaigns.rule.campaignButton')}
+            {t('campaigns.rule')}
           </button>
         </div>
       </div>
 
-      {/* Ad Squads expandables */}
       {isExpanded && (
         <div className="border-t border-snap-border/50 px-4 pb-4 pt-3">
           <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-snap-muted">
-            {t('campaigns.adsets.title')} ({isLoading ? '...' : adSquads.length})
+            {t('campaigns.adsets')} ({isLoading ? '...' : adSquads.length})
           </p>
           {isLoading ? (
             <div className="space-y-2">
@@ -207,7 +206,6 @@ const CampaignRow = ({
   );
 };
 
-// ── Page principale ─────────────────────────────────────────────
 const CampaignsPage = () => {
   const { t } = useTranslation();
   const [query, setQuery] = useState<CampaignQuery>(defaultQuery);
@@ -233,44 +231,43 @@ const CampaignsPage = () => {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <header className="rounded-2xl border border-snap-border bg-snap-card p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-semibold text-snap-ink">{t('campaigns.title')}</h1>
-              <p className="mt-1 text-sm text-snap-muted">
-                {isLoading ? t('dashboard.loading') : (total === 1 ? t('campaigns.subtitle.single', { count: total }) : t('campaigns.subtitle.multi', { count: total }))}
-              </p>
+            <p className="mt-1 text-sm text-snap-muted">
+              {isLoading
+                ? t('dashboard.loading')
+                : `${total} campaign${total !== 1 ? 's' : ''} · Click ▶ to see Ad Sets`}
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="inline-flex items-center gap-2 rounded-xl border border-snap-border bg-snap-soft px-3 py-1.5 text-xs text-snap-muted">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                {t('campaigns.liveStatus')}
-            </div>
+          <div className="inline-flex items-center gap-2 rounded-xl border border-snap-border bg-snap-soft px-3 py-1.5 text-xs text-snap-muted">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            {t('campaigns.liveStatus')}
           </div>
         </div>
       </header>
 
-      {/* Légende */}
-      <div className="flex items-center gap-4 text-xs text-snap-muted px-1">
+      {/* Legend */}
+      <div className="flex items-center gap-4 px-1 text-xs text-snap-muted">
         <span className="flex items-center gap-1.5">
           <span className="inline-flex h-5 w-5 items-center justify-center rounded-lg bg-snap-yellow text-[9px] font-bold text-snap-ink">⚡</span>
-          {t('campaigns.legend.campaign')}
+          Yellow = rule on whole campaign
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-flex h-5 rounded-xl border border-snap-yellow/40 bg-snap-yellow/10 px-2 text-[9px] font-bold text-yellow-700 items-center">⚡ Règle</span>
-          {t('campaigns.legend.adset')}
+          <span className="inline-flex h-5 items-center rounded-xl border border-snap-yellow/40 bg-snap-yellow/10 px-2 text-[9px] font-bold text-yellow-700">⚡ Rule</span>
+          Outlined = rule on specific Ad Set
         </span>
       </div>
 
-      {/* Filtres */}
+      {/* Filters */}
       <div className="rounded-2xl border border-snap-border bg-snap-card p-4">
         <div className="grid gap-3 md:grid-cols-3">
           <input
             type="search"
             value={query.search}
             onChange={e => setQuery({ ...query, search: e.target.value, page: 1 })}
-            placeholder={t('campaigns.filters.searchPlaceholder')}
+            placeholder={t('campaigns.search')}
             className="w-full rounded-xl border border-snap-border bg-snap-soft px-4 py-2.5 text-sm text-snap-ink placeholder:text-snap-muted focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-200 transition-all"
           />
           <select
@@ -278,29 +275,27 @@ const CampaignsPage = () => {
             onChange={e => setQuery({ ...query, status: e.target.value as CampaignQuery['status'], page: 1 })}
             className="w-full rounded-xl border border-snap-border bg-snap-soft px-4 py-2.5 text-sm text-snap-ink focus:border-yellow-400 focus:outline-none transition-all"
           >
-            <option value="ALL">{t('campaigns.filters.status.All')}</option>
-            <option value="ACTIVE">{t('campaigns.filters.status.ACTIVE')}</option>
-            <option value="PAUSED">{t('campaigns.filters.status.PAUSED')}</option>
-            <option value="ARCHIVED">{t('campaigns.filters.status.ARCHIVED')}</option>
-            <option value="DRAFT">{t('campaigns.filters.status.DRAFT')}</option>
+            <option value="ALL">{t('campaigns.status.all')}</option>
+            <option value="ACTIVE">{t('campaigns.status.active')}</option>
+            <option value="PAUSED">{t('campaigns.status.paused')}</option>
+            <option value="ARCHIVED">{t('campaigns.status.archived')}</option>
+            <option value="DRAFT">{t('campaigns.status.draft')}</option>
           </select>
           <button
             onClick={() => setExpandedIds(prev => prev.size > 0 ? new Set() : new Set(campaigns.map(c => c.id)))}
             className="rounded-xl border border-snap-border bg-snap-soft px-4 py-2.5 text-sm text-snap-muted hover:text-snap-ink transition-all"
           >
-            {expandedIds.size > 0 ? t('campaigns.button.collapseAll') : t('campaigns.button.expandAll')}
+            {expandedIds.size > 0 ? t('campaigns.collapseAll') : t('campaigns.expandAll')}
           </button>
         </div>
       </div>
 
-      {/* Error */}
       {isError && (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
-          {t('campaigns.error.load')}
+          {t('campaigns.error')}
         </div>
       )}
 
-      {/* Liste campagnes */}
       <div className="space-y-3">
         {isLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
@@ -323,35 +318,32 @@ const CampaignsPage = () => {
         )}
       </div>
 
-      {/* Pagination */}
       {!isLoading && total > query.pageSize && (
         <div className="flex items-center justify-between">
-          <span className="text-xs text-snap-muted">{t('campaigns.pagination.page', { current: query.page, total: totalPages })}</span>
+          <span className="text-xs text-snap-muted">
+            {t('campaigns.page', { current: String(query.page), total: String(totalPages) })}
+          </span>
           <div className="flex gap-2">
             <button
               disabled={query.page <= 1}
               onClick={() => setQuery(p => ({ ...p, page: p.page - 1 }))}
               className="rounded-xl border border-snap-border bg-snap-soft px-3 py-1.5 text-xs text-snap-muted hover:text-snap-ink disabled:opacity-40 transition-all"
             >
-              {t('campaigns.pagination.previous')}
+              {t('campaigns.previous')}
             </button>
             <button
               disabled={query.page >= totalPages}
               onClick={() => setQuery(p => ({ ...p, page: p.page + 1 }))}
               className="rounded-xl border border-snap-border bg-snap-soft px-3 py-1.5 text-xs text-snap-muted hover:text-snap-ink disabled:opacity-40 transition-all"
             >
-              {t('campaigns.pagination.next')}
+              {t('campaigns.next')}
             </button>
           </div>
         </div>
       )}
 
-      {/* Modal Rule */}
       {ruleTarget && (
-        <RuleModal
-          target={ruleTarget}
-          onClose={() => setRuleTarget(null)}
-        />
+        <RuleModal target={ruleTarget} onClose={() => setRuleTarget(null)} />
       )}
     </div>
   );
