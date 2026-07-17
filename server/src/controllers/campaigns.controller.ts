@@ -1,5 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
-import { fetchCampaigns, getDashboardStats } from '../services/sync/snapchat-ads.service';
+import { fetchCampaigns, fetchAdSquads, fetchAds, getDashboardStats } from '../services/sync/snapchat-ads.service';
+
+export async function listAds(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId;
+    const { adSquadId } = req.params;
+    const ads = await fetchAds(userId, adSquadId);
+    return res.json({ data: ads, total: ads.length });
+  } catch (error) {
+    next(error);
+  }
+}
 
 export async function listCampaigns(req: Request, res: Response, next: NextFunction) {
   try {
@@ -14,9 +25,8 @@ export async function listCampaigns(req: Request, res: Response, next: NextFunct
 
     if (q) {
       const ql = q.toLowerCase();
-      filtered = filtered.filter((c: any) => (c.name || '').toString().toLowerCase().includes(ql));
+      filtered = filtered.filter((c: any) => (c.name || '').toLowerCase().includes(ql));
     }
-
     if (status) {
       filtered = filtered.filter((c: any) => c.status === status);
     }
@@ -31,10 +41,23 @@ export async function listCampaigns(req: Request, res: Response, next: NextFunct
   }
 }
 
+export async function listAdSquads(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId;
+    const { campaignId } = req.params;
+    const squads = await fetchAdSquads(userId, campaignId);
+    return res.json({ data: squads, total: squads.length });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function stats(req: Request, res: Response, next: NextFunction) {
   try {
     const userId = (req as any).userId;
-    const data = await getDashboardStats(userId);
+    const startDate = req.query.startDate?.toString();
+    const endDate = req.query.endDate?.toString();
+    const data = await getDashboardStats(userId, startDate, endDate);
     return res.json(data);
   } catch (error) {
     next(error);

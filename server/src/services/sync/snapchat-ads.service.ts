@@ -1,60 +1,18 @@
-import axios, { AxiosInstance } from 'axios';
-import { decrypt } from '../../utils/crypto';
+﻿import axios, { AxiosInstance } from 'axios';
 import prisma from '../../prisma/client';
-import { getSnapchatAccount, refreshSnapchatToken } from '../snapchat.service';
+import { getSnapchatAccount, getValidAccessToken } from '../snapchat.service';
 
 const API_BASE = 'https://adsapi.snapchat.com/v1';
 
-function normalizeSnapchatResponse<T>(response: any): T[] {
-  const data = response?.data ?? response;
-  return Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
-}
-
-async function getValidAccessToken(userId: string): Promise<string> {
-  const account = await getSnapchatAccount(userId);
-  if (!account) throw new Error('Snapchat account not connected');
-
-  if (account.tokenExpiresAt && account.tokenExpiresAt.getTime() <= Date.now()) {
-    await refreshSnapchatToken(account.externalAccountId);
-    const refreshed = await getSnapchatAccount(userId);
-    if (!refreshed) throw new Error('Snapchat account not connected after refresh');
-    return decrypt(refreshed.accessTokenEncrypted);
-  }
-
-  return decrypt(account.accessTokenEncrypted);
-}
-
 async function getAuthorizedAxios(userId: string): Promise<AxiosInstance> {
-  const account = await getSnapchatAccount(userId);
-  if (!account) throw new Error('Snapchat account not connected');
-
   const accessToken = await getValidAccessToken(userId);
-  const client = axios.create({
+  return axios.create({
     baseURL: API_BASE,
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json'
-    }
+      Accept: 'application/json',
+    },
   });
-
-  client.interceptors.response.use(
-    response => response,
-    async error => {
-      const originalRequest = error.config;
-      if (error.response?.status === 401 && !originalRequest?._retry) {
-        originalRequest._retry = true;
-        await refreshSnapchatToken(account.externalAccountId);
-        const refreshed = await getSnapchatAccount(userId);
-        if (!refreshed) throw error;
-        const newToken = decrypt(refreshed.accessTokenEncrypted);
-        originalRequest.headers.Authorization = `Bearer ${newToken}`;
-        return client(originalRequest);
-      }
-      return Promise.reject(error);
-    }
-  );
-
-  return client;
 }
 
 export async function fetchCampaigns(userId: string) {
@@ -62,186 +20,228 @@ export async function fetchCampaigns(userId: string) {
   if (!account) throw new Error('Snapchat account not connected');
 
   const client = await getAuthorizedAxios(userId);
-  const response = await client.get(`/adaccounts/${account.externalAccountId}/campaigns`, {
-    params: {
-      fields: 'id,name,status,spend,impressions,clicks,ctr,cpm,cpa,roas'
-    }
-  });
+  const response = await client.get(`/adaccounts/${account.externalAccountId}/campaigns`);
 
-  return normalizeSnapchatResponse<any>(response).map(campaign => ({
-    id: campaign.id,
-    name: campaign.name,
-    status: campaign.status,
-    spend: Number(campaign.spend ?? 0),
-    impressions: Number(campaign.impressions ?? 0),
-    clicks: Number(campaign.clicks ?? 0),
-    ctr: Number(campaign.ctr ?? 0),
-    cpm: Number(campaign.cpm ?? 0),
-    cpa: Number(campaign.cpa ?? 0),
-    roas: Number(campaign.roas ?? 0)
-  }));
+  const campaigns: any[] = response.data?.campaigns ?? [];
+  return campaigns.map((item: any) => {
+    const c = item.campaign ?? item;
+    return {
+      id: c.id,
+      name: c.name,
+      status: c.status,
+      objective: c.objective ?? null,
+      dailyBudget: c.daily_budget_micro ? c.daily_budget_micro / 1_000_000 : null,
+      startTime: c.start_time ?? null,
+      endTime: c.end_time ?? null,
+    };
+  });
 }
 
 export async function fetchAdSquads(userId: string, campaignId: string) {
   const client = await getAuthorizedAxios(userId);
-  const response = await client.get(`/campaigns/${campaignId}/adSquads`, {
-    params: {
-      fields: 'id,name,status,daily_budget,spend,impressions,clicks'
-    }
+  const response = await client.get(`/campaigns/${campaignId}/adsquads`);
+  const squads: any[] = response.data?.adsquads ?? [];
+  return squads.map((item: any) => {
+    const s = item.adsquad ?? item;
+    return {
+      id: s.id,
+      name: s.name,
+      status: s.status,
+      dailyBudget: s.daily_budget_micro ? s.daily_budget_micro / 1_000_000 : null,
+      bidAmount: s.bid_micro ? s.bid_micro / 1_000_000 : null,
+    };
   });
-  return normalizeSnapchatResponse<any>(response);
 }
 
-export async function fetchAds(userId: string, adSquadId: string) {
+export async function fetchCampaignStats(userId: string, adAccountId: string) {
   const client = await getAuthorizedAxios(userId);
-  const response = await client.get(`/adSquads/${adSquadId}/ads`, {
-    params: {
-      fields: 'id,name,status,spend,impressions,clicks'
-    }
-  });
-  return normalizeSnapchatResponse<any>(response);
+  try {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const end = now.toISOString();
+
+    const response = await client.get(`/adaccounts/${adAccountId}/stats`, {
+      params: {
+        granularity: 'TOTAL',
+        fields: 'impressions,swipes,spend',
+        start_time: start,
+        end_time: end,
+      },
+    });
+    return response.data?.total_stats?.[0]?.total_stat?.breakdown_stats ?? null;
+  } catch {
+    return null;
+  }
 }
 
-export async function getDashboardStats(userId: string) {
+export async function getDashboardStats(userId: string, startDateParam?: string, endDateParam?: string) {
+  const account = await getSnapchatAccount(userId);
+  if (!account) throw new Error('Snapchat account not connected');
+
   const campaigns = await fetchCampaigns(userId);
+  console.log('u{1F3AF} Campaigns:', JSON.stringify(campaigns.map(c => ({ id: c.id, name: c.name, status: c.status })), null, 2));
+  console.log('CAMPAIGNS:', JSON.stringify(campaigns.map(c => ({ id: c.id, name: c.name, status: c.status }))));
   const campaignCount = campaigns.length;
-  const activeCampaigns = campaigns.filter(c => ['ACTIVE', 'ENABLED'].includes(c.status?.toString().toUpperCase())).length;
-  const pausedCampaigns = campaigns.filter(c => ['PAUSED', 'PAUSE', 'DISABLED'].includes(c.status?.toString().toUpperCase())).length;
-  const spend = campaigns.reduce((sum, campaign) => sum + (Number(campaign.spend) || 0), 0);
-  const impressions = campaigns.reduce((sum, campaign) => sum + (Number(campaign.impressions) || 0), 0);
-  const clicks = campaigns.reduce((sum, campaign) => sum + (Number(campaign.clicks) || 0), 0);
+  const activeCampaigns = campaigns.filter(c => c.status?.toUpperCase() === 'ACTIVE').length;
+  const pausedCampaigns = campaigns.filter(c => c.status?.toUpperCase() === 'PAUSED').length;
+
+  let spend = 0, impressions = 0, clicks = 0;
+  try {
+    const client = await getAuthorizedAxios(userId);
+    const now = new Date();
+
+    const fmt = (d: Date) => d.toISOString().split('.')[0] + '+00:00';
+    const todayStr = now.toISOString().split('T')[0];
+
+    // Start : dÃ©but du jour demandÃ© Ã  minuit UTC
+    const startRaw = startDateParam
+      ? new Date(startDateParam + 'T00:00:00Z')
+      : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 30, 0, 0, 0));
+    const start = new Date(Date.UTC(startRaw.getUTCFullYear(), startRaw.getUTCMonth(), startRaw.getUTCDate(), 0, 0, 0));
+
+    // End : si jour passÃ© â†’ minuit du lendemain (= fin de la journÃ©e complÃ¨te)
+    //        si aujourd'hui â†’ heure courante pile (Snapchat exige heure ronde)
+    let endHour: Date;
+    const endDateStr = endDateParam ?? todayStr;
+
+    if (endDateStr < todayStr) {
+      // Jour passÃ© : couvrir la journÃ©e entiÃ¨re jusqu'Ã  minuit
+      const endRaw = new Date(endDateStr + 'T00:00:00Z');
+      endHour = new Date(Date.UTC(endRaw.getUTCFullYear(), endRaw.getUTCMonth(), endRaw.getUTCDate() + 1, 0, 0, 0));
+    } else {
+      // Aujourd'hui : heure courante arrondie Ã  l'heure pile
+      endHour = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), 0, 0));
+      // Si mÃªme heure que start, avancer d'1h
+      if (endHour.getTime() <= start.getTime()) {
+        endHour = new Date(endHour.getTime() + 3600 * 1000);
+      }
+    }
+
+    console.log('ðŸ“Š Stats period:', fmt(start), '->', fmt(endHour));
+
+    // Spend au niveau adaccount (seul champ acceptÃ© Ã  ce niveau)
+    const accountStatsRes = await client.get(
+      `/adaccounts/${account.externalAccountId}/stats`,
+      { params: { granularity: 'TOTAL', fields: 'spend', start_time: fmt(start), end_time: fmt(endHour) } }
+    );
+    const accountStat = accountStatsRes.data?.total_stats?.[0]?.total_stat;
+    spend = accountStat?.stats?.spend ? accountStat.stats.spend / 1_000_000 : 0;
+    // Impressions + swipes au niveau campagne
+    // Impressions + swipes — seulement sur la campagne ACTIVE pour débugger
+const activeCampaign = campaigns.find(c => c.status === 'ACTIVE');
+console.log('🎯 Active campaign:', activeCampaign?.id, activeCampaign?.name);
+
+const campaignStatsResults = await Promise.allSettled(
+  campaigns.map(c =>
+    client.get(`/campaigns/${c.id}/stats`, {
+      params: { granularity: 'TOTAL', fields: 'impressions,swipes', start_time: fmt(start), end_time: fmt(endHour) }
+    })
+  )
+);
+
+for (const result of campaignStatsResults) {
+  if (result.status === 'fulfilled') {
+    const totalStat = result.value.data?.total_stats?.[0]?.total_stat;
+    if (totalStat?.stats) {
+      // Les données sont dans .stats, pas directement sur total_stat
+      impressions += totalStat.stats.impressions ?? 0;
+      clicks += totalStat.stats.swipes ?? 0;
+    }
+  }
+}
+
+    console.log('âœ… spend:', spend, '| impressions:', impressions, '| swipes:', clicks);
+
+  } catch (err: any) {
+    console.error('âŒ Stats failed:', err.response?.status, err.response?.data ?? err.message);
+  }
+
   const ctr = impressions > 0 ? Number(((clicks / impressions) * 100).toFixed(2)) : 0;
   const cpm = impressions > 0 ? Number(((spend / impressions) * 1000).toFixed(2)) : 0;
   const cpa = clicks > 0 ? Number((spend / clicks).toFixed(2)) : 0;
-  const roasValues = campaigns.filter(c => !isNaN(Number(c.roas))).map(c => Number(c.roas));
-  const roas = roasValues.length > 0 ? Number((roasValues.reduce((sum, value) => sum + value, 0) / roasValues.length).toFixed(2)) : 0;
 
-  const squadsSettled = await Promise.allSettled(campaigns.map(campaign => fetchAdSquads(userId, campaign.id)));
-  const adSquads = squadsSettled.flatMap(result => result.status === 'fulfilled' ? result.value : []);
-  const adSquadCount = adSquads.length;
-
-  const adsSettled = await Promise.allSettled(adSquads.map((squad: any) => fetchAds(userId, squad.id)));
-  const ads = adsSettled.flatMap(result => result.status === 'fulfilled' ? result.value : []);
-  const adCount = ads.length;
-
-  return {
-    campaignCount,
-    activeCampaigns,
-    pausedCampaigns,
-    spend,
-    impressions,
-    clicks,
-    ctr,
-    cpm,
-    cpa,
-    roas,
-    adSquadCount,
-    adCount
-  };
+  return { campaignCount, activeCampaigns, pausedCampaigns, spend, impressions, clicks, ctr, cpm, cpa, roas: 0 };
 }
-
 export async function syncCampaigns(userId: string) {
+  const account = await getSnapchatAccount(userId);
+  if (!account) throw new Error('Snapchat account not connected');
+
   const campaigns = await fetchCampaigns(userId);
-  if (!Array.isArray(campaigns)) throw new Error('Invalid campaigns payload');
-  const updates = await Promise.all(campaigns.map(async (campaign: any) => {
-    return prisma.campaign.upsert({
-      where: { externalCampaignId_snapchatAccountId: { externalCampaignId: campaign.id, snapchatAccountId: campaign.account_id } },
-      create: {
-        snapchatAccountId: campaign.account_id,
-        externalCampaignId: campaign.id,
-        name: campaign.name,
-        status: campaign.status,
-        dailyBudget: campaign.dailyBudget,
-        spent: campaign.spend || 0,
-        impressions: campaign.impressions || 0,
-        clicks: campaign.clicks || 0,
-        ctr: campaign.ctr,
-        cpc: campaign.cpm
-      },
-      update: {
-        name: campaign.name,
-        status: campaign.status,
-        dailyBudget: campaign.dailyBudget,
-        spent: campaign.spend || 0,
-        impressions: campaign.impressions || 0,
-        clicks: campaign.clicks || 0,
-        ctr: campaign.ctr,
-        cpc: campaign.cpm
-      }
-    });
-  }));
+  console.log('u{1F3AF} Campaigns:', JSON.stringify(campaigns.map(c => ({ id: c.id, name: c.name, status: c.status })), null, 2));
+  console.log('ðŸŽ¯ All campaigns:', JSON.stringify(campaigns.map(c => ({ id: c.id, name: c.name, status: c.status })), null, 2));
+
+  const updates = await Promise.all(
+    campaigns.map((campaign: any) =>
+      prisma.campaign.upsert({
+        where: { externalId: campaign.id },
+        create: {
+          snapchatAccountId: account.id,
+          externalId: campaign.id,
+          name: campaign.name,
+          status: campaign.status,
+          objective: campaign.objective,
+          dailyBudget: campaign.dailyBudget,
+          startTime: campaign.startTime ? new Date(campaign.startTime) : null,
+          endTime: campaign.endTime ? new Date(campaign.endTime) : null,
+        },
+        update: {
+          name: campaign.name,
+          status: campaign.status,
+          objective: campaign.objective,
+          dailyBudget: campaign.dailyBudget,
+          startTime: campaign.startTime ? new Date(campaign.startTime) : null,
+          endTime: campaign.endTime ? new Date(campaign.endTime) : null,
+        },
+      })
+    )
+  );
+
   return updates;
 }
 
 export async function syncAdSquads(userId: string) {
-  const campaigns = await fetchCampaigns(userId);
-  if (!Array.isArray(campaigns)) throw new Error('Invalid campaigns payload');
+  const campaigns = await prisma.campaign.findMany({
+    where: { snapchatAccount: { userId } },
+  });
 
   const updates = [];
   for (const campaign of campaigns) {
-    const squads = await fetchAdSquads(userId, campaign.id);
-    if (!Array.isArray(squads)) continue;
+    const squads = await fetchAdSquads(userId, campaign.externalId);
     for (const squad of squads) {
-      updates.push(await prisma.adSquad.upsert({
-        where: { externalAdSquadId_campaignId: { externalAdSquadId: squad.id, campaignId: campaign.id } },
-        create: {
-          campaignId: campaign.id,
-          externalAdSquadId: squad.id,
-          name: squad.name,
-          status: squad.status,
-          dailyBudget: squad.daily_budget,
-          spent: squad.spend || 0,
-          impressions: squad.impressions || 0,
-          clicks: squad.clicks || 0
-        },
-        update: {
-          name: squad.name,
-          status: squad.status,
-          dailyBudget: squad.daily_budget,
-          spent: squad.spend || 0,
-          impressions: squad.impressions || 0,
-          clicks: squad.clicks || 0
-        }
-      }));
+      updates.push(
+        await prisma.adSquad.upsert({
+          where: { externalId: squad.id },
+          create: {
+            campaignId: campaign.id,
+            externalId: squad.id,
+            name: squad.name,
+            status: squad.status,
+            dailyBudget: squad.dailyBudget,
+            bidAmount: squad.bidAmount,
+          },
+          update: {
+            name: squad.name,
+            status: squad.status,
+            dailyBudget: squad.dailyBudget,
+            bidAmount: squad.bidAmount,
+          },
+        })
+      );
     }
   }
   return updates;
 }
-
-export async function syncAds(userId: string) {
-  const campaigns = await fetchCampaigns(userId);
-  if (!Array.isArray(campaigns)) throw new Error('Invalid campaigns payload');
-
-  const updates = [];
-  for (const campaign of campaigns) {
-    const squads = await fetchAdSquads(userId, campaign.id);
-    if (!Array.isArray(squads)) continue;
-    for (const squad of squads) {
-      const ads = await fetchAds(userId, squad.id);
-      if (!Array.isArray(ads)) continue;
-      for (const ad of ads) {
-        updates.push(await prisma.ad.upsert({
-          where: { externalAdId_adSquadId: { externalAdId: ad.id, adSquadId: squad.id } },
-          create: {
-            campaignId: campaign.id,
-            adSquadId: squad.id,
-            externalAdId: ad.id,
-            name: ad.name,
-            status: ad.status,
-            spent: ad.spend || 0,
-            impressions: ad.impressions || 0,
-            clicks: ad.clicks || 0
-          },
-          update: {
-            name: ad.name,
-            status: ad.status,
-            spent: ad.spend || 0,
-            impressions: ad.impressions || 0,
-            clicks: ad.clicks || 0
-          }
-        }));
-      }
-    }
-  }
-  return updates;
+export async function fetchAds(userId: string, adSquadId: string) {
+  const client = await getAuthorizedAxios(userId);
+  const response = await client.get(`/adsquads/${adSquadId}/ads`);
+  const ads: any[] = response.data?.ads ?? [];
+  return ads.map((item: any) => {
+    const a = item.ad ?? item;
+    return {
+      id: a.id,
+      name: a.name,
+      status: a.status,
+      type: a.type ?? null,
+    };
+  });
 }

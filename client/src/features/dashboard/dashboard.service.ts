@@ -20,8 +20,10 @@ export interface SnapchatAccountResponse {
   tokenExpiresAt: string | null;
 }
 
-export async function fetchDashboardStats(): Promise<DashboardStatsResponse> {
-  const response = await api.get('/campaigns/stats');
+export async function fetchDashboardStats(startDate: string, endDate: string): Promise<DashboardStatsResponse> {
+  const response = await api.get('/campaigns/stats', {
+    params: { startDate, endDate }
+  });
   return response.data;
 }
 
@@ -33,9 +35,6 @@ export async function fetchSnapchatAccount(): Promise<SnapchatAccountResponse> {
 export async function getSnapchatAuthorizeUrl(): Promise<string> {
   const response = await api.get('/snapchat/authorize');
   const url = response.data?.url;
-  if (!url) {
-    throw new Error('Missing authorization URL from server');
-  }
+  if (!url) throw new Error('Missing authorization URL from server');
   return url;
 }
-

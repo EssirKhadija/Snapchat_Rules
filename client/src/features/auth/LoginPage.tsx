@@ -2,6 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../../shared/lib/auth';
+import { useTranslation } from '../../shared/lib/i18n';
 import { useNavigate, Link } from 'react-router-dom';
 
 const schema = z.object({
@@ -14,6 +15,7 @@ type FormValues = z.infer<typeof schema>;
 const LoginPage = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { t } = useTranslation();
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
   const onSubmit = async (data: FormValues) => {
@@ -30,13 +32,13 @@ const LoginPage = () => {
         <span className="text-lg font-semibold text-snap-ink">SnapRules</span>
       </div>
 
-      <h1 className="text-2xl font-semibold text-snap-ink">Connexion</h1>
-      <p className="mt-1 text-sm text-snap-muted">Gérez vos règles Snapchat Ads.</p>
+      <h1 className="text-2xl font-semibold text-snap-ink">{t('auth.login.title')}</h1>
+      <p className="mt-1 text-sm text-snap-muted">{t('auth.login.subtitle')}</p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-4">
         <div>
           <label className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-snap-muted mb-2">
-            Email
+            {t('auth.login.email')}
           </label>
           <input
             type="email"
@@ -49,7 +51,7 @@ const LoginPage = () => {
 
         <div>
           <label className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-snap-muted mb-2">
-            Mot de passe
+            {t('auth.login.password')}
           </label>
           <input
             type="password"
@@ -64,14 +66,14 @@ const LoginPage = () => {
           type="submit"
           className="mt-2 w-full rounded-xl bg-snap-yellow py-3 text-sm font-semibold text-snap-ink hover:brightness-105 active:scale-[0.98] transition-all duration-150"
         >
-          Se connecter
+          {t('auth.login.submit')}
         </button>
       </form>
 
       <p className="mt-6 text-center text-sm text-snap-muted">
-        Pas encore de compte?{' '}
+        {t('auth.login.noAccount')}{' '}
         <Link to="/auth/register" className="font-semibold text-snap-ink hover:text-yellow-600 transition-colors">
-          Créer un compte
+          {t('auth.login.register')}
         </Link>
       </p>
     </div>

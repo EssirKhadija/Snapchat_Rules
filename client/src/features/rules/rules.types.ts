@@ -1,4 +1,4 @@
-export type ConditionField = 'spend' | 'ctr' | 'cpa' | 'cpm' | 'roas' | 'conversions' | 'clicks' | 'impressions' | 'status';
+export type ConditionField = 'spend' | 'ctr' | 'cpc' | 'cpa' | 'cpm' | 'roas' | 'conversions' | 'clicks' | 'impressions' | 'status';
 export type ConditionOperator = 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'neq';
 
 export interface RuleCondition {

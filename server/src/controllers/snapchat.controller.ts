@@ -1,89 +1,118 @@
 import { Request, Response, NextFunction } from 'express';
 import {
   getAuthorizationUrl,
-  exchangeCodeForTokens,
   connectSnapchat,
   disconnectSnapchat,
   getSnapchatAccount,
-  refreshSnapchatToken
+  getValidAccessToken,
 } from '../services/snapchat.service';
 import logger from '../utils/logger';
 
+// GET /api/v1/snapchat/authorize
+// Génère l'URL d'autorisation Snapchat et la retourne au frontend.
+// Le userId est passé en "state" pour être récupéré dans le callback.
 export async function authorize(req: Request, res: Response, next: NextFunction) {
   try {
-    const state = req.query.state?.toString() || (req as any).userId;
-    if (!state) {
-      return res.status(400).json({ message: 'Missing state' });
+    const userId = (req as any).userId;
+    if (!userId) {
+      return res.status(400).json({ message: 'Missing userId — make sure you are authenticated' });
     }
-    const url = getAuthorizationUrl(state);
+    const url = getAuthorizationUrl(userId);
     return res.json({ url });
-  } catch (error: any) {
-    console.error('========== CALLBACK ERROR ==========');
-    console.error(error.response?.status);
-    console.error(error.response?.data);
-    console.error(error);
-
-    return res.status(500).json({
-      message: error.response?.data || error.message,
-    });
-  }
-}
-
-export async function callback(req: Request, res: Response, next: NextFunction) {
-  try {
-    const code = req.query.code?.toString();
-    const userId = req.query.state as string;
-
-if (!userId) {
-    return res.status(400).json({
-        message: "Missing userId"
-    });
-}
-    if (!code) return res.status(400).json({ message: 'Missing authorization code' });
-    const tokens = await exchangeCodeForTokens(code);
-    await connectSnapchat(userId, tokens);
-    return res.json({ message: 'Snapchat account connected' });
   } catch (error) {
-    logger.error('Snapchat callback error', { error });
+    logger.error('Snapchat authorize error', { error });
     next(error);
   }
 }
 
-export async function refresh(req: Request, res: Response, next: NextFunction) {
+// GET /api/v1/snapchat/callback
+// Reçoit le code OAuth de Snapchat et le userId (passé en state).
+// Appelle directement connectSnapchat qui gère tout en interne :
+//   exchangeCodeForTokens → fetchOrganization → fetchAdAccount → Prisma upsert
+export async function callback(req: Request, res: Response, next: NextFunction) {
+  try {
+    const code = req.query.code?.toString();
+    const userId = req.query.state?.toString();
+    const error = req.query.error?.toString();
+
+    // Snapchat peut renvoyer une erreur explicite dans la query string
+    if (error) {
+      logger.error('Snapchat OAuth error returned in callback', { error });
+      return res.status(400).json({ message: `Snapchat OAuth error: ${error}` });
+    }
+
+    if (!userId) {
+      return res.status(400).json({ message: 'Missing state (userId) in callback' });
+    }
+    if (!code) {
+      return res.status(400).json({ message: 'Missing authorization code in callback' });
+    }
+
+    // connectSnapchat gère tout : token exchange + fetch org/ad account + Prisma
+    await connectSnapchat(userId, code);
+
+    // En production tu peux rediriger vers le frontend ici :
+    // return res.redirect(`${process.env.FRONTEND_URL}/?snap=connected`);
+    return res.json({ message: 'Snapchat account connected successfully' });
+  } catch (error: any) {
+    // Log détaillé pour débugger les erreurs Snapchat API
+    logger.error('Snapchat callback error', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+    });
+    next(error);
+  }
+}
+
+// GET /api/v1/snapchat/me
+// Retourne les infos du compte Snapchat connecté pour l'utilisateur courant.
+export async function details(req: Request, res: Response, next: NextFunction) {
   try {
     const account = await getSnapchatAccount((req as any).userId);
-    if (!account) return res.status(404).json({ message: 'Snapchat account not found' });
-    const data = await refreshSnapchatToken(account.externalAccountId);
-    if (!data) return res.status(400).json({ message: 'Unable to refresh Snapchat token' });
-    return res.json(data);
+    if (!account) {
+      return res.status(404).json({ message: 'No Snapchat account connected' });
+    }
+    return res.json({
+      externalAccountId: account.externalAccountId,
+      organizationId: account.organizationId,
+      displayName: account.displayName,
+      status: account.status,
+      tokenExpiresAt: account.tokenExpiresAt,
+    });
+  } catch (error) {
+    logger.error('Snapchat details error', { error });
+    next(error);
+  }
+}
+
+// POST /api/v1/snapchat/refresh
+// Force un refresh du token Snapchat pour l'utilisateur courant.
+// En temps normal, getValidAccessToken() dans le service le fait automatiquement.
+export async function refresh(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId;
+    const account = await getSnapchatAccount(userId);
+    if (!account) {
+      return res.status(404).json({ message: 'No Snapchat account connected' });
+    }
+    // getValidAccessToken rafraîchit le token si nécessaire et retourne un token valide
+    const accessToken = await getValidAccessToken(userId);
+    return res.json({ message: 'Token refreshed', valid: !!accessToken });
   } catch (error) {
     logger.error('Snapchat refresh error', { error });
     next(error);
   }
 }
 
+// DELETE /api/v1/snapchat/disconnect
+// Supprime le compte Snapchat lié à l'utilisateur courant.
 export async function disconnect(req: Request, res: Response, next: NextFunction) {
   try {
     await disconnectSnapchat((req as any).userId);
-    return res.json({ message: 'Disconnected Snapchat account' });
+    return res.json({ message: 'Snapchat account disconnected' });
   } catch (error) {
     logger.error('Snapchat disconnect error', { error });
-    next(error);
-  }
-}
-
-export async function details(req: Request, res: Response, next: NextFunction) {
-  try {
-    const account = await getSnapchatAccount((req as any).userId);
-    if (!account) return res.status(404).json({ message: 'Snapchat account not found' });
-    return res.json({
-      externalAccountId: account.externalAccountId,
-      displayName: account.displayName,
-      status: account.status,
-      tokenExpiresAt: account.tokenExpiresAt
-    });
-  } catch (error) {
-    logger.error('Snapchat details error', { error });
     next(error);
   }
 }

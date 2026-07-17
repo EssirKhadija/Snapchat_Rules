@@ -1,240 +1,191 @@
 ﻿import axios from 'axios';
-import qs from 'qs';
+import crypto from 'crypto';
 import prisma from '../prisma/client';
-import { encrypt, decrypt } from '../utils/crypto';
-import {
-  SNAPCHAT_CLIENT_ID,
-  SNAPCHAT_CLIENT_SECRET,
-  SNAPCHAT_REDIRECT_URI
-} from '../config';
 
-const AUTH_URL = 'https://accounts.snapchat.com/login/oauth2/authorize';
-const TOKEN_URL = 'https://accounts.snapchat.com/login/oauth2/access_token';
+const SNAP_TOKEN_URL = 'https://accounts.snapchat.com/login/oauth2/access_token';
+const SNAP_API_BASE = 'https://adsapi.snapchat.com/v1';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY!;
 
-export function getAuthorizationUrl(state: string) {
-  const query = qs.stringify({
-    client_id: SNAPCHAT_CLIENT_ID,
-    redirect_uri: SNAPCHAT_REDIRECT_URI,
+function getKey(): Buffer {
+  // Hash la clé pour toujours obtenir exactement 32 bytes, quelle que soit sa longueur
+  return crypto.createHash('sha256').update(ENCRYPTION_KEY).digest();
+}
+
+function encrypt(text: string): string {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', getKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(text), cipher.final()]);
+  return iv.toString('hex') + ':' + encrypted.toString('hex');
+}
+
+function decrypt(text: string): string {
+  const [ivHex, encryptedHex] = text.split(':');
+  const iv = Buffer.from(ivHex, 'hex');
+  const encryptedText = Buffer.from(encryptedHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', getKey(), iv);
+  const decrypted = Buffer.concat([decipher.update(encryptedText), decipher.final()]);
+  return decrypted.toString();
+}
+
+// Accepte maintenant un state (userId) pour le passer à Snapchat
+export function getAuthorizationUrl(state: string): string {
+  const params = new URLSearchParams({
+    client_id: process.env.SNAPCHAT_CLIENT_ID!,
+    redirect_uri: process.env.SNAPCHAT_REDIRECT_URI!,
     response_type: 'code',
     scope: 'snapchat-marketing-api',
-    state
+    state,
   });
-  return `${AUTH_URL}?${query}`;
+  return `https://accounts.snapchat.com/login/oauth2/authorize?${params.toString()}`;
 }
 
-export async function exchangeCodeForTokens(code: string) {
-  const payload = qs.stringify({
-    client_id: SNAPCHAT_CLIENT_ID,
-    client_secret: SNAPCHAT_CLIENT_SECRET,
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: SNAPCHAT_REDIRECT_URI
-  });
+export async function connectSnapchat(userId: string, code: string): Promise<void> {
+  const tokenRes = await axios.post(
+    SNAP_TOKEN_URL,
+    new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: process.env.SNAPCHAT_CLIENT_ID!,
+      client_secret: process.env.SNAPCHAT_CLIENT_SECRET!,
+      code,
+      redirect_uri: process.env.SNAPCHAT_REDIRECT_URI!,
+    }),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+  );
 
-  try {
-    const response = await axios.post(TOKEN_URL, payload, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      }
-    });
+  const { access_token, refresh_token, expires_in } = tokenRes.data;
+  if (!access_token) throw new Error('Snapchat token exchange failed: no access_token');
 
-    // Debug: log token response structure so we can extract account_id from the response.
-    try {
-      console.log('Snapchat token response keys:', Object.keys(response.data || {}));
-      if (response.data?.id_token) {
-        try {
-          const parts = response.data.id_token.split('.');
-          if (parts.length === 3) {
-            const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-            const padded = payload + '='.repeat((4 - payload.length % 4) % 4);
-            const decoded = JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
-            console.log('Snapchat id_token payload keys:', Object.keys(decoded || {}));
-          }
-        } catch (err: any) {
-          console.warn('Failed to decode id_token payload', err?.message);
-        }
-      }
-      if (response.data?.token_responses) {
-        const trs = Array.isArray(response.data.token_responses) ? response.data.token_responses : [response.data.token_responses];
-        trs.forEach((tr: any, idx: number) => {
-          console.log(`token_responses[${idx}] keys:`, Object.keys(tr || {}));
-          if (tr?.id_token && typeof tr.id_token === 'string') {
-            try {
-              const parts = tr.id_token.split('.');
-              if (parts.length === 3) {
-                const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-                const padded = payload + '='.repeat((4 - payload.length % 4) % 4);
-                const decoded = JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
-                console.log(`token_responses[${idx}] id_token payload keys:`, Object.keys(decoded || {}));
-              }
-            } catch (err: any) {
-              console.warn('Failed to decode token_responses id_token', err?.message);
-            }
-          }
-        });
-      }
-    } catch (err: any) {
-      console.warn('Error logging token response shape', err?.message);
-    }
+  console.log('✅ Token exchange OK. Fetching organizations...');
 
-    return response.data;
+  const orgsRes = await axios.get(
+    `${SNAP_API_BASE}/me/organizations?with_ad_accounts=true`,
+    { headers: { Authorization: `Bearer ${access_token}` } }
+  );
 
-  } catch (error: any) {
-    console.log("========== SNAPCHAT ERROR ==========");
-    console.log(error.response?.status);
-    console.log(error.response?.data);
-    throw error;
-  }
-}
-
-export async function refreshSnapchatToken(accountId: string) {
-  const account = await prisma.snapchatAccount.findFirst({ where: { externalAccountId: accountId } });
-  if (!account) return null;
-
-  const refreshToken = decrypt(account.refreshTokenEncrypted);
-
-  const payload = qs.stringify({
-    client_id: SNAPCHAT_CLIENT_ID,
-    client_secret: SNAPCHAT_CLIENT_SECRET,
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken
-  });
-
-  const response = await axios.post(TOKEN_URL, payload, {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-  });
-
-  const data = response.data as {
-    access_token: string;
-    refresh_token: string;
-    expires_in: number;
-  };
-
-  await prisma.snapchatAccount.update({
-    where: { id: account.id },
-    data: {
-      accessTokenEncrypted: encrypt(data.access_token),
-      refreshTokenEncrypted: encrypt(data.refresh_token),
-      tokenExpiresAt: new Date(Date.now() + data.expires_in * 1000),
-      updatedAt: new Date()
-    }
-  });
-
-  return data;
-}
-
-export async function disconnectSnapchat(userId: string) {
-  await prisma.snapchatAccount.deleteMany({ where: { userId } });
-}
-
-export async function connectSnapchat(userId: string, tokens: any) {
-  if (!tokens) throw new Error('Missing tokens in Snapchat token response');
-
-  function decodeJwtPayload(token: string) {
-    try {
-      const parts = token.split('.');
-      if (parts.length !== 3) return undefined;
-      const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const padded = payload + '='.repeat((4 - payload.length % 4) % 4);
-      return JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
-    } catch {
-      return undefined;
-    }
+  const organizations: any[] = orgsRes.data?.organizations ?? [];
+  if (organizations.length === 0) {
+    throw new Error('No Snapchat organization found. Make sure the user is an Organization Admin.');
   }
 
-  function extractAccountId(item: any): string | undefined {
-    if (!item || typeof item !== 'object') return undefined;
-    if (item.account_id) return item.account_id?.toString();
-    if (item.advertiser_id) return item.advertiser_id?.toString();
-    if (item.ad_account_id) return item.ad_account_id?.toString();
-    if (item.id) return item.id?.toString();
-    if (Array.isArray(item.advertisers) && item.advertisers.length > 0) return extractAccountId(item.advertisers[0]);
-    if (Array.isArray(item.data) && item.data.length > 0) return extractAccountId(item.data[0]);
-    if (item.data && typeof item.data === 'object') return extractAccountId(item.data);
-    if (item.profile && typeof item.profile === 'object') return extractAccountId(item.profile);
-    return undefined;
+  const firstOrg = organizations[0]?.organization;
+  if (!firstOrg) throw new Error('Could not parse organization from Snapchat response');
+
+  const organizationId: string = firstOrg.id;
+  const organizationName: string = firstOrg.name ?? 'Snapchat Org';
+  const adAccounts: any[] = firstOrg.ad_accounts ?? [];
+
+  let adAccountId: string;
+  let adAccountName: string;
+
+  if (adAccounts.length > 0) {
+    const activeAccount = adAccounts.find((a: any) => a.ad_account?.status === 'ACTIVE');
+    const chosenAccount = activeAccount ?? adAccounts[0];
+    adAccountId = chosenAccount.ad_account?.id ?? chosenAccount.id;
+    adAccountName = chosenAccount.ad_account?.name ?? chosenAccount.name ?? 'Ad Account';
+  } else {
+    console.log('⚠️ No ad_accounts in org response, fetching separately...');
+    const adAccountsRes = await axios.get(
+      `${SNAP_API_BASE}/organizations/${organizationId}/adaccounts`,
+      { headers: { Authorization: `Bearer ${access_token}` } }
+    );
+    const fetchedAccounts: any[] = adAccountsRes.data?.adaccounts ?? [];
+    if (fetchedAccounts.length === 0) {
+      throw new Error(`No Ad Account found under organization ${organizationId}.`);
+    }
+    const active = fetchedAccounts.find((a: any) => a.adaccount?.status === 'ACTIVE');
+    const chosen = active ?? fetchedAccounts[0];
+    adAccountId = chosen.adaccount?.id ?? chosen.id;
+    adAccountName = chosen.adaccount?.name ?? chosen.name ?? 'Ad Account';
   }
 
-  async function resolveAccountId(toks: any) {
-    if (toks.account_id) return toks.account_id?.toString();
-    if (toks.advertiser_id) return toks.advertiser_id?.toString();
-    if (toks.ad_account_id) return toks.ad_account_id?.toString();
+  console.log(`✅ Organization: ${organizationName} (${organizationId})`);
+  console.log(`✅ Ad Account: ${adAccountName} (${adAccountId})`);
 
-    if (toks.id_token && typeof toks.id_token === 'string') {
-      const payload = decodeJwtPayload(toks.id_token);
-      const extracted = extractAccountId(payload);
-      if (extracted) return extracted;
-      if (payload?.sub) return payload.sub.toString();
-    }
+  const tokenExpiresAt = new Date(Date.now() + (expires_in ?? 3600) * 1000);
 
-    if (toks.token_responses) {
-      const responses = Array.isArray(toks.token_responses) ? toks.token_responses : [toks.token_responses];
-      for (const response of responses) {
-        if (!response || typeof response !== 'object') continue;
-        const extracted = extractAccountId(response);
-        if (extracted) return extracted;
-        if (response.id_token && typeof response.id_token === 'string') {
-          const payload = decodeJwtPayload(response.id_token);
-          const nested = extractAccountId(payload);
-          if (nested) return nested;
-          if (payload?.sub) return payload.sub.toString();
-        }
-      }
-    }
-
-    const client = axios.create({ baseURL: 'https://adsapi.snapchat.com', headers: { Authorization: `Bearer ${toks.access_token}` }, timeout: 5000 });
-    const endpoints = ['/v1/me', '/v1/advertisers', '/v1/ad_accounts', '/v1/adaccounts', '/v1/advertiser'];
-    for (const ep of endpoints) {
-      try {
-        const resp = await client.get(ep);
-        const extracted = extractAccountId(resp.data);
-        if (extracted) return extracted;
-      } catch (err: any) {
-        console.warn(`Snapchat: ${ep} failed:`, err?.response?.status || err.message);
-      }
-    }
-
-    return undefined;
-  }
-
-  const resolved = await resolveAccountId(tokens);
-  if (!resolved) {
-    console.error('Snapchat: unable to determine account_id from token response or API; token response keys:', Object.keys(tokens));
-    if (tokens.token_responses) {
-      const tokenResponseKeys = Array.isArray(tokens.token_responses)
-        ? tokens.token_responses.map((tr: any) => (tr && typeof tr === 'object' ? Object.keys(tr) : []))
-        : Object.keys(tokens.token_responses || {});
-      console.error('Snapchat: token_responses keys:', tokenResponseKeys);
-    }
-    throw new Error('Missing account_id in Snapchat token response');
-  }
-
-  tokens.account_id = resolved;
-
-  const encryptedAccess = encrypt(tokens.access_token);
-  const encryptedRefresh = encrypt(tokens.refresh_token);
-
-  return prisma.snapchatAccount.upsert({
+  await prisma.snapchatAccount.upsert({
     where: { userId },
-    update: {
-      externalAccountId: tokens.account_id,
-      displayName: tokens.account_name || tokens.account_id,
-      accessTokenEncrypted: encryptedAccess,
-      refreshTokenEncrypted: encryptedRefresh,
-      tokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
-      status: 'CONNECTED'
-    },
     create: {
       userId,
-      externalAccountId: tokens.account_id,
-      displayName: tokens.account_name || tokens.account_id,
-      accessTokenEncrypted: encryptedAccess,
-      refreshTokenEncrypted: encryptedRefresh,
-      tokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
-      status: 'CONNECTED'
-    }
+      externalAccountId: adAccountId,
+      organizationId,
+      displayName: adAccountName,
+      accessToken: encrypt(access_token),
+      refreshToken: encrypt(refresh_token),
+      tokenExpiresAt,
+    },
+    update: {
+      externalAccountId: adAccountId,
+      organizationId,
+      displayName: adAccountName,
+      accessToken: encrypt(access_token),
+      refreshToken: encrypt(refresh_token),
+      tokenExpiresAt,
+    },
   });
+
+  console.log('✅ Snapchat account saved to Prisma');
 }
+
+// Alias utilisé par le controller et snapchat-ads.service
 export async function getSnapchatAccount(userId: string) {
   return prisma.snapchatAccount.findUnique({ where: { userId } });
+}
+
+export async function getSnapchatMe(userId: string) {
+  const account = await getSnapchatAccount(userId);
+  if (!account) return null;
+  return {
+    displayName: account.displayName,
+    externalAccountId: account.externalAccountId,
+    organizationId: account.organizationId,
+  };
+}
+
+export async function disconnectSnapchat(userId: string): Promise<void> {
+  await prisma.snapchatAccount.deleteMany({ where: { userId } });
+  console.log(`✅ Snapchat account disconnected for user ${userId}`);
+}
+
+export async function getValidAccessToken(userId: string): Promise<string> {
+  const account = await getSnapchatAccount(userId);
+  if (!account) throw new Error('Snapchat account not connected');
+
+  const fiveMinutes = 5 * 60 * 1000;
+  if (account.tokenExpiresAt > new Date(Date.now() + fiveMinutes)) {
+    return decrypt(account.accessToken);
+  }
+
+  console.log('🔄 Refreshing Snapchat access token...');
+  const res = await axios.post(
+    SNAP_TOKEN_URL,
+    new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: process.env.SNAPCHAT_CLIENT_ID!,
+      client_secret: process.env.SNAPCHAT_CLIENT_SECRET!,
+      refresh_token: decrypt(account.refreshToken),
+    }),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+  );
+
+  const { access_token, refresh_token, expires_in } = res.data;
+  const tokenExpiresAt = new Date(Date.now() + (expires_in ?? 3600) * 1000);
+
+  await prisma.snapchatAccount.update({
+    where: { userId },
+    data: {
+      accessToken: encrypt(access_token),
+      refreshToken: encrypt(refresh_token),
+      tokenExpiresAt,
+    },
+  });
+
+  console.log('✅ Token refreshed');
+  return access_token;
+}
+
+// Gardé pour compatibilité avec d'éventuels anciens imports
+export async function refreshSnapchatToken(userId: string) {
+  const token = await getValidAccessToken(userId);
+  return { access_token: token };
 }
