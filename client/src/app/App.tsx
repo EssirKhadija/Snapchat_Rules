@@ -7,19 +7,22 @@ import DashboardPage from '../features/dashboard/DashboardPage';
 import { CampaignsPage } from '../features/campaigns';
 import { RuleBuilderPage } from '../features/rules';
 import ProtectedRoute from '../features/layout/ProtectedRoute';
+import HomePage from '../features/home/HomePage';
 
 function App() {
   return (
     <Routes>
+      <Route path="/" element={<HomePage />} />
+
       <Route path="/auth" element={<AuthLayout />}>
         <Route path="login" element={<LoginPage />} />
         <Route path="register" element={<RegisterPage />} />
       </Route>
 
-      <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+      <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
         <Route index element={<DashboardPage />} />
         <Route path="campaigns" element={<CampaignsPage />} />
-        <Route path="rules/builder" element={<RuleBuilderPage/>} />
+        <Route path="rules/builder" element={<RuleBuilderPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/auth/login" replace />} />

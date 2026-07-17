@@ -20,7 +20,7 @@ const LoginPage = () => {
 
   const onSubmit = async (data: FormValues) => {
     await login(data);
-    navigate('/');
+    navigate('/dashboard');
   };
 
   return (
@@ -81,3 +81,5 @@ const LoginPage = () => {
 };
 
 export default LoginPage;
+
+
