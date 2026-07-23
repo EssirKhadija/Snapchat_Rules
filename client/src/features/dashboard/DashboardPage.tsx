@@ -4,6 +4,7 @@ import { fetchDashboardStats, fetchSnapchatAccount, getSnapchatAuthorizeUrl } fr
 import { DashboardStatsResponse, SnapchatAccountResponse } from './dashboard.service';
 import { ExecutionItem, NotificationItem } from './dashboard.types';
 import { useTranslation } from '../../shared/lib/i18n';
+import api from '../../shared/lib/api';
 
 const demoExecutions: ExecutionItem[] = [
   { id: 'exec-001', ruleName: 'Increase low CPC budget', status: 'SUCCEEDED', message: 'Budget increased by 15%', executedAt: '2026-06-25 15:23' },
@@ -23,32 +24,40 @@ function fmt(d: Date): string {
 
 const statusClasses: Record<string, string> = {
   SUCCEEDED: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-  FAILED:    'bg-red-50 text-red-600 border border-red-200',
-  SKIPPED:   'bg-snap-soft text-snap-muted border border-snap-border',
+  FAILED: 'bg-red-50 text-red-600 border border-red-200',
+  SKIPPED: 'bg-snap-soft text-snap-muted border border-snap-border',
 };
 
 const DashboardPage = () => {
   const { t } = useTranslation();
 
   const PRESETS = [
-    { key: 'today',     label: t('dashboard.period.today'),     getDates: () => { const d = fmt(new Date()); return { start: d, end: d }; } },
-    { key: 'yesterday', label: t('dashboard.period.yesterday'), getDates: () => { const d = new Date(); d.setDate(d.getDate()-1); const s = fmt(d); return { start: s, end: s }; } },
-    { key: '7days',     label: t('dashboard.period.7days'),     getDates: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate()-7); return { start: fmt(s), end: fmt(e) }; } },
-    { key: '30days',    label: t('dashboard.period.30days'),    getDates: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate()-30); return { start: fmt(s), end: fmt(e) }; } },
+    { key: 'today', label: t('dashboard.period.today'), getDates: () => { const d = fmt(new Date()); return { start: d, end: d }; } },
+    { key: 'yesterday', label: t('dashboard.period.yesterday'), getDates: () => { const d = new Date(); d.setDate(d.getDate() - 1); const s = fmt(d); return { start: s, end: s }; } },
+    { key: '7days', label: t('dashboard.period.7days'), getDates: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate() - 7); return { start: fmt(s), end: fmt(e) }; } },
+    { key: '30days', label: t('dashboard.period.30days'), getDates: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate() - 30); return { start: fmt(s), end: fmt(e) }; } },
     { key: 'thisMonth', label: t('dashboard.period.thisMonth'), getDates: () => { const n = new Date(); return { start: fmt(new Date(n.getFullYear(), n.getMonth(), 1)), end: fmt(n) }; } },
-    { key: 'lastMonth', label: t('dashboard.period.lastMonth'), getDates: () => { const n = new Date(); const s = new Date(n.getFullYear(), n.getMonth()-1, 1); const e = new Date(n.getFullYear(), n.getMonth(), 0); return { start: fmt(s), end: fmt(e) }; } },
+    { key: 'lastMonth', label: t('dashboard.period.lastMonth'), getDates: () => { const n = new Date(); const s = new Date(n.getFullYear(), n.getMonth() - 1, 1); const e = new Date(n.getFullYear(), n.getMonth(), 0); return { start: fmt(s), end: fmt(e) }; } },
   ];
 
   const [dateRange, setDateRange] = useState(() => {
-    const e = new Date(); const s = new Date(); s.setDate(s.getDate()-30);
+    const e = new Date(); const s = new Date(); s.setDate(s.getDate() - 30);
     return { start: fmt(s), end: fmt(e) };
   });
   const [activePresetKey, setActivePresetKey] = useState('30days');
   const [showCustom, setShowCustom] = useState(false);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+
+  // Fetch la liste des campagnes pour le dropdown
+  const { data: campaignsData } = useQuery({
+    queryKey: ['campaigns', 'list'],
+    queryFn: () => api.get('/campaigns').then(r => r.data?.data ?? []),
+    staleTime: 1000 * 60 * 5, 
+  });
 
   const { data: stats, isLoading: statsLoading, error: statsError, refetch } = useQuery<DashboardStatsResponse>({
-    queryKey: ['dashboard', 'stats', dateRange.start, dateRange.end],
-    queryFn: () => fetchDashboardStats(dateRange.start, dateRange.end),
+    queryKey: ['dashboard', 'stats', dateRange.start, dateRange.end, selectedCampaignId],
+    queryFn: () => fetchDashboardStats(dateRange.start, dateRange.end, selectedCampaignId || undefined),
     staleTime: 1000 * 60,
     retry: false,
   });
@@ -78,13 +87,13 @@ const DashboardPage = () => {
   const metricCards = useMemo(() => {
     const loading = statsLoading || !stats;
     return [
-      { label: t('dashboard.stats.campaigns'),   value: loading ? '—' : stats.campaignCount,  sub: loading ? '...' : `${stats.activeCampaigns} ${t('campaigns.active').toLowerCase()}`, accent: true  },
-      { label: t('dashboard.stats.paused'),       value: loading ? '—' : stats.pausedCampaigns, sub: t('dashboard.stats.pausedSub'),      accent: false },
-      { label: t('dashboard.stats.spend'),        value: loading ? '—' : `$${stats.spend.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: t('dashboard.stats.spendSub'), accent: false },
-      { label: t('dashboard.stats.impressions'),  value: loading ? '—' : stats.impressions.toLocaleString('en-US'), sub: t('dashboard.stats.impressionsSub'), accent: false },
-      { label: t('dashboard.stats.ctr'),          value: loading ? '—' : `${stats.ctr}%`,      sub: t('dashboard.stats.ctrSub'),         accent: false },
-      { label: t('dashboard.stats.cpm'),          value: loading ? '—' : `$${stats.cpm.toFixed(2)}`, sub: t('dashboard.stats.cpmSub'),  accent: false },
-      { label: t('dashboard.stats.cpa'),          value: loading ? '—' : `$${stats.cpa.toFixed(2)}`, sub: t('dashboard.stats.cpaSub'),  accent: false },
+      { label: t('dashboard.stats.campaigns'), value: loading ? '—' : stats.campaignCount, sub: loading ? '...' : `${stats.activeCampaigns} ${t('campaigns.active').toLowerCase()}`, accent: true },
+      { label: t('dashboard.stats.paused'), value: loading ? '—' : stats.pausedCampaigns, sub: t('dashboard.stats.pausedSub'), accent: false },
+      { label: t('dashboard.stats.spend'), value: loading ? '—' : `$${stats.spend.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: t('dashboard.stats.spendSub'), accent: false },
+      { label: t('dashboard.stats.impressions'), value: loading ? '—' : stats.impressions.toLocaleString('en-US'), sub: t('dashboard.stats.impressionsSub'), accent: false },
+      { label: t('dashboard.stats.ctr'), value: loading ? '—' : `${stats.ctr}%`, sub: t('dashboard.stats.ctrSub'), accent: false },
+      { label: t('dashboard.stats.cpm'), value: loading ? '—' : `$${stats.cpm.toFixed(2)}`, sub: t('dashboard.stats.cpmSub'), accent: false },
+      { label: t('dashboard.stats.cpa'), value: loading ? '—' : `$${stats.cpa.toFixed(2)}`, sub: t('dashboard.stats.cpaSub'), accent: false },
     ];
   }, [stats, statsLoading, t]);
 
@@ -128,20 +137,18 @@ const DashboardPage = () => {
             <button
               key={preset.key}
               onClick={() => applyPreset(preset)}
-              className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
-                activePresetKey === preset.key && !showCustom
-                  ? 'bg-snap-yellow text-snap-ink'
-                  : 'border border-snap-border bg-snap-soft text-snap-muted hover:text-snap-ink hover:border-snap-muted'
-              }`}
+              className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${activePresetKey === preset.key && !showCustom
+                ? 'bg-snap-yellow text-snap-ink'
+                : 'border border-snap-border bg-snap-soft text-snap-muted hover:text-snap-ink hover:border-snap-muted'
+                }`}
             >
               {preset.label}
             </button>
           ))}
           <button
             onClick={() => { setShowCustom(true); setActivePresetKey(''); }}
-            className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
-              showCustom ? 'bg-snap-yellow text-snap-ink' : 'border border-snap-border bg-snap-soft text-snap-muted hover:text-snap-ink'
-            }`}
+            className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${showCustom ? 'bg-snap-yellow text-snap-ink' : 'border border-snap-border bg-snap-soft text-snap-muted hover:text-snap-ink'
+              }`}
           >
             {t('dashboard.period.custom')}
           </button>
@@ -164,7 +171,35 @@ const DashboardPage = () => {
               {t('dashboard.period.apply')}
             </button>
           </div>
-        )}
+        )}<br />
+        {/* Filtre campagne */}
+<div className="rounded-2xl border border-snap-border bg-snap-card p-4">
+  <div className="flex flex-wrap items-center gap-3">
+    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-snap-muted">
+      Campaign
+    </span>
+    <select
+      value={selectedCampaignId}
+      onChange={e => setSelectedCampaignId(e.target.value)}
+      className="flex-1 rounded-xl border border-snap-border bg-snap-soft px-4 py-2 text-sm text-snap-ink focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-200 transition-all"
+    >
+      <option value="">All campaigns</option>
+      {(campaignsData ?? []).map((c: any) => (
+        <option key={c.id} value={c.id}>
+          {c.name} {c.status === 'ACTIVE' ? '🟢' : '⏸️'}
+        </option>
+      ))}
+    </select>
+    {selectedCampaignId && (
+      <button
+        onClick={() => setSelectedCampaignId('')}
+        className="rounded-xl border border-snap-border bg-snap-soft px-3 py-2 text-xs text-snap-muted hover:text-snap-ink transition-all"
+      >
+        Clear
+      </button>
+    )}
+  </div>
+</div>
       </div>
 
       {statsError && (

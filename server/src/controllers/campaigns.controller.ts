@@ -57,7 +57,8 @@ export async function stats(req: Request, res: Response, next: NextFunction) {
     const userId = (req as any).userId;
     const startDate = req.query.startDate?.toString();
     const endDate = req.query.endDate?.toString();
-    const data = await getDashboardStats(userId, startDate, endDate);
+    const campaignId = req.query.campaignId?.toString();
+    const data = await getDashboardStats(userId, startDate, endDate, campaignId);
     return res.json(data);
   } catch (error) {
     next(error);

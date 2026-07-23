@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, ReactNode, useContext, useMemo } from 'react';
 
 type Locale = 'fr' | 'en';
 type Translations = Record<string, string>;
@@ -265,25 +265,13 @@ interface I18nContextValue {
 const I18nContext = createContext<I18nContextValue | undefined>(undefined);
 
 export const I18nProvider = ({ children }: { children: ReactNode }) => {
-  const [locale, setLocale] = useState<Locale>('en');
-
-  useEffect(() => {
-    const savedLocale = localStorage.getItem('locale') as Locale | null;
-    if (savedLocale === 'fr' || savedLocale === 'en') {
-      setLocale(savedLocale);
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('locale', locale);
-  }, [locale]);
-
-  const toggleLocale = () => setLocale(c => (c === 'fr' ? 'en' : 'fr'));
+  const locale: Locale = 'en';
+  const toggleLocale = () => {};
 
   const t = useMemo(
     () =>
       (key: string, vars?: Record<string, string | number>) => {
-        let value = translations[locale]?.[key] ?? key;
+        let value = translations['en']?.[key] ?? key;
         if (vars) {
           Object.entries(vars).forEach(([k, v]) => {
             value = value.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v));
@@ -291,7 +279,7 @@ export const I18nProvider = ({ children }: { children: ReactNode }) => {
         }
         return value;
       },
-    [locale]
+    []
   );
 
   return <I18nContext.Provider value={{ locale, toggleLocale, t }}>{children}</I18nContext.Provider>;

@@ -20,9 +20,13 @@ export interface SnapchatAccountResponse {
   tokenExpiresAt: string | null;
 }
 
-export async function fetchDashboardStats(startDate: string, endDate: string): Promise<DashboardStatsResponse> {
+export async function fetchDashboardStats(
+  startDate: string,
+  endDate: string,
+  campaignId?: string
+): Promise<DashboardStatsResponse> {
   const response = await api.get('/campaigns/stats', {
-    params: { startDate, endDate }
+    params: { startDate, endDate, campaignId: campaignId || undefined }
   });
   return response.data;
 }
