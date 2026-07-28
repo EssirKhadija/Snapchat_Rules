@@ -469,14 +469,12 @@ function HeroPanel() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-white/50 sr-body">Active rule</span>
               <span
-                className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 sr-text-11 font-semibold sr-body transition-colors ${
-                  ruleDone ? "bg-emerald-500/20 text-emerald-400" : "bg-white/10 text-white/40"
-                }`}
+                className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 sr-text-11 font-semibold sr-body transition-colors ${ruleDone ? "bg-emerald-500/20 text-emerald-400" : "bg-white/10 text-white/40"
+                  }`}
               >
                 <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    ruleDone ? "bg-emerald-400 sr-pulse-dot-green" : "bg-white/40"
-                  }`}
+                  className={`h-1.5 w-1.5 rounded-full ${ruleDone ? "bg-emerald-400 sr-pulse-dot-green" : "bg-white/40"
+                    }`}
                 />
                 {ruleDone ? "Active" : "Compiling…"}
               </span>
@@ -729,6 +727,7 @@ export default function SnapRulesLanding() {
         className="sticky top-0 z-40 border-b backdrop-blur"
         style={{ backgroundColor: "var(--sr-nav-bg)", borderColor: "var(--sr-border)" }}
       >
+
         <div className="mx-auto max-w-6xl px-5 sm:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="h-7 w-7 rounded-lg sr-bg-yellow flex items-center justify-center">
@@ -737,8 +736,11 @@ export default function SnapRulesLanding() {
             <span className="sr-display font-semibold sr-text-15 tracking-tight">SnapRules</span>
           </div>
           <div className="flex items-center gap-3">
+            <SecondaryButton className="px-4 py-2 sr-text-13" onClick={() => navigate('/pricing')}>
+  Pricing
+</SecondaryButton>
             <SecondaryButton className="px-4 py-2 sr-text-13" onClick={() => navigate('/auth/login')}>Log in</SecondaryButton>
-            <PrimaryButton className="px-4 py-2 sr-text-13" onClick={() => navigate('/auth/register')}>
+            <PrimaryButton className="px-4 py-2 sr-text-13" onClick={() => navigate('/pricing')}>
               Get started for free
               <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
             </PrimaryButton>
@@ -786,7 +788,7 @@ export default function SnapRulesLanding() {
 
             <Reveal delay={240}>
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                <PrimaryButton className="px-6 py-3.5 text-sm" onClick={() => navigate('/auth/register')}>
+                <PrimaryButton className="px-6 py-3.5 text-sm" onClick={() => navigate('/pricing')}>
                   Get started for free
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </PrimaryButton>
@@ -1023,7 +1025,7 @@ export default function SnapRulesLanding() {
             </p>
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
               <button
-                onClick={() => navigate('/auth/register')}
+                onClick={() => navigate('/pricing')}
                 className="group inline-flex items-center justify-center gap-2 rounded-xl sr-bg-dark px-7 py-3.5 text-sm font-semibold text-white sr-body transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
               >
                 Create an account

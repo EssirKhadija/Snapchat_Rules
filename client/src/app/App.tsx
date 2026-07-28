@@ -8,11 +8,14 @@ import { CampaignsPage } from '../features/campaigns';
 import { RuleBuilderPage } from '../features/rules';
 import ProtectedRoute from '../features/layout/ProtectedRoute';
 import HomePage from '../features/home/HomePage';
+import PricingPage from '../features/home/PricingPage';
+
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/pricing" element={<PricingPage />} />
       <Route path="/auth" element={<AuthLayout />}>
         <Route path="login" element={<LoginPage />} />
         <Route path="register" element={<RegisterPage />} />
