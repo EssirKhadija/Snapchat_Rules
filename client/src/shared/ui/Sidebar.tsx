@@ -5,6 +5,7 @@ import { useTranslation } from '../lib/i18n';
 const navItems = [
   { to: '/dashboard', label: 'sidebar.dashboard', icon: '▦' },
   { to: '/dashboard/campaigns', label: 'sidebar.campaigns', icon: '◈' },
+  { to: '/dashboard/campaigns/launch', label: 'Bulk Launch', icon: '⚡' },
 ];
 
 const Sidebar = () => {

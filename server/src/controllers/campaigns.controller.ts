@@ -1,6 +1,31 @@
 import { Request, Response, NextFunction } from 'express';
 import { fetchCampaigns, fetchAdSquads, fetchAds, getDashboardStats } from '../services/sync/snapchat-ads.service';
+import multer from 'multer';
+import { bulkLaunchCampaign } from '../services/sync/bulk-launch.service';
 
+const upload = multer({ storage: multer.memoryStorage() });
+
+export async function bulkLaunch(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId;
+    let template, row;
+
+    // Multipart (avec fichier) ou JSON (avec URL)
+    if (req.file) {
+      template = JSON.parse(req.body.template);
+      row = JSON.parse(req.body.row);
+    } else {
+      template = req.body.template;
+      row = req.body.row;
+    }
+
+    const result = await bulkLaunchCampaign(userId, template, row, req.file?.buffer);
+    return res.json(result);
+  } catch (error: any) {
+    console.error('Bulk launch error:', error.response?.data ?? error.message);
+    next(error);
+  }
+}
 export async function listAds(req: Request, res: Response, next: NextFunction) {
   try {
     const userId = (req as any).userId;

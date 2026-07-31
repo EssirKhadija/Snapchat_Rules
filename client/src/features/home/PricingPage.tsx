@@ -11,7 +11,7 @@ const plans = [
     annualPrice: 0,
     accounts: 1,
     rules: 'Unlimited',
-    duration: '7 days',
+    duration: '3 days',
     isFree: true,
     isPopular: false,
     features: [
@@ -19,7 +19,7 @@ const plans = [
       'Unlimited rules',
       'Dashboard & stats',
       'Campaign management',
-      '7-day free access',
+      '3-day free access',
     ],
     cta: 'Start free trial',
     ctaStyle: 'border',
@@ -27,16 +27,16 @@ const plans = [
   {
     key: 'basic',
     name: 'Basic',
-    desc: 'For solo media buyers managing a few accounts.',
-    monthlyPrice: 15,
-    annualPrice: 12,
-    accounts: 2,
+    desc: 'For solo media buyers managing one account.',
+    monthlyPrice: 9.99,
+    annualPrice: 8.49,
+    accounts: 1,
     rules: 'Unlimited',
     duration: null,
     isFree: false,
     isPopular: false,
     features: [
-      '2 Snapchat accounts',
+      '1 Snapchat account',
       'Unlimited rules',
       'Dashboard & stats',
       'Campaign management',
@@ -48,16 +48,16 @@ const plans = [
   {
     key: 'pro',
     name: 'Pro',
-    desc: 'For growing teams managing multiple clients.',
-    monthlyPrice: 35,
-    annualPrice: 28,
-    accounts: 5,
+    desc: 'For teams managing 2 to 3 Snapchat accounts.',
+    monthlyPrice: 29.99,
+    annualPrice: 25.49,
+    accounts: 3,
     rules: 'Unlimited',
     duration: null,
     isFree: false,
     isPopular: true,
     features: [
-      '5 Snapchat accounts',
+      '2–3 Snapchat accounts',
       'Unlimited rules',
       'Advanced dashboard',
       'Campaign management',
@@ -71,8 +71,8 @@ const plans = [
     key: 'agency',
     name: 'Agency',
     desc: 'For agencies managing unlimited client accounts.',
-    monthlyPrice: 75,
-    annualPrice: 60,
+    monthlyPrice: 70,
+    annualPrice: 59.50,
     accounts: Infinity,
     rules: 'Unlimited',
     duration: null,
@@ -98,9 +98,10 @@ export default function PricingPage() {
   const [annual, setAnnual] = useState(false);
 
   const getPrice = (plan: typeof plans[0]) => {
-    if (plan.isFree) return '$0';
-    return annual ? `$${plan.annualPrice}` : `$${plan.monthlyPrice}`;
-  };
+  if (plan.isFree) return '$0';
+  const price = annual ? plan.annualPrice : plan.monthlyPrice;
+  return `$${price.toFixed(2)}`;
+};
 
   return (
     <div className="min-h-screen bg-snap-bg">
@@ -165,7 +166,7 @@ export default function PricingPage() {
             >
               Annual
               <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                -20%
+                -15%
               </span>
             </button>
           </div>
