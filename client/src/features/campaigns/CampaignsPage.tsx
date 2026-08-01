@@ -7,6 +7,7 @@ import type { Ad } from './campaigns.types';
 import { useTranslation } from '../../shared/lib/i18n';
 import { useNavigate } from 'react-router-dom';
 import { Zap } from 'lucide-react';
+import LaunchCampaignWizard from './launch/LaunchCampaignWizard';
 
 const defaultQuery: CampaignQuery = {
   search: '',
@@ -214,6 +215,7 @@ const CampaignsPage = () => {
   const [query, setQuery] = useState<CampaignQuery>(defaultQuery);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [ruleTarget, setRuleTarget] = useState<{ type: 'campaign' | 'adsquad' | 'ad'; id: string; name: string } | null>(null);
+  const [showWizard, setShowWizard] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['campaigns', query],
@@ -249,10 +251,11 @@ const CampaignsPage = () => {
             {t('campaigns.liveStatus')}
           </div>
           <button
-            onClick={() => navigate('/dashboard/campaigns/launch')}
-            className="flex items-center gap-2 rounded-xl bg-snap-yellow px-4 py-2 text-sm font-semibold text-snap-ink hover:brightness-105 transition-all"
+            id="launch-campaign-btn"
+            onClick={() => setShowWizard(true)}
+            className="flex items-center gap-2 rounded-xl bg-snap-yellow px-4 py-2 text-sm font-semibold text-snap-ink hover:brightness-105 hover:-translate-y-0.5 hover:shadow-md transition-all"
           >
-            <Zap className="h-4 w-4" /> Bulk Launch
+            <Zap className="h-4 w-4" /> Launch Campaign
           </button>
         </div>
       </header>
@@ -353,6 +356,10 @@ const CampaignsPage = () => {
 
       {ruleTarget && (
         <RuleModal target={ruleTarget} onClose={() => setRuleTarget(null)} />
+      )}
+
+      {showWizard && (
+        <LaunchCampaignWizard onClose={() => setShowWizard(false)} />
       )}
     </div>
   );

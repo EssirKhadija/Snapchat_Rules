@@ -61,7 +61,7 @@ router.post('/refresh', authenticate, SnapchatController.refresh);
  *         description: Snapchat account disconnected
  */
 router.post('/disconnect', authenticate, SnapchatController.disconnect);
-
+router.delete('/disconnect', authenticate, SnapchatController.disconnect);
 /**
  * @openapi
  * /snapchat/me:

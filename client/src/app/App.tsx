@@ -9,9 +9,7 @@ import { RuleBuilderPage } from '../features/rules';
 import ProtectedRoute from '../features/layout/ProtectedRoute';
 import HomePage from '../features/home/HomePage';
 import PricingPage from '../features/home/PricingPage';
-import LaunchPage from '../features/campaigns/launch/LaunchPage';
-
-
+import AdAccountsPage from '../features/dashboard/AdAccountsPage';
 function App() {
   return (
     <Routes>
@@ -24,7 +22,7 @@ function App() {
 
       <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
         <Route index element={<DashboardPage />} />
-        <Route path="campaigns/launch" element={<LaunchPage />} />
+        <Route path="accounts" element={<AdAccountsPage />} />
         <Route path="campaigns" element={<CampaignsPage />} />
         <Route path="rules/builder" element={<RuleBuilderPage />} />
       </Route>

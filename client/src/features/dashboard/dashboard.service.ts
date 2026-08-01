@@ -42,3 +42,7 @@ export async function getSnapchatAuthorizeUrl(): Promise<string> {
   if (!url) throw new Error('Missing authorization URL from server');
   return url;
 }
+
+export async function disconnectSnapchatAccount(): Promise<void> {
+  await api.delete('/snapchat/disconnect');
+}

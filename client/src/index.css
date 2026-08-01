@@ -25,3 +25,29 @@ body {
   background: #ddd9d0;
   border-radius: 999px;
 }
+
+/* ── Wizard overlay animations ───────────────────────────── */
+@keyframes wizardBackdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes wizardCardIn {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+@keyframes wizardStepIn {
+  from { opacity: 0; transform: translateX(32px); }
+  to   { opacity: 1; transform: translateX(0);    }
+}
+
+@keyframes wizardStepBack {
+  from { opacity: 0; transform: translateX(-32px); }
+  to   { opacity: 1; transform: translateX(0);     }
+}
+
+.wizard-backdrop-in  { animation: wizardBackdropIn 0.25s ease both; }
+.wizard-card-in      { animation: wizardCardIn     0.3s cubic-bezier(0.34,1.3,0.64,1) both; }
+.wizard-step-in      { animation: wizardStepIn     0.28s ease both; }
+.wizard-step-back    { animation: wizardStepBack   0.28s ease both; }
