@@ -13,5 +13,6 @@ export const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 export const SNAPCHAT_CLIENT_ID = process.env.SNAPCHAT_CLIENT_ID || '';
 export const SNAPCHAT_CLIENT_SECRET = process.env.SNAPCHAT_CLIENT_SECRET || '';
 export const SNAPCHAT_REDIRECT_URI = process.env.SNAPCHAT_REDIRECT_URI || '';
+export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'snaprules-encryption-secret';
 export const SYNC_CRON_EXPRESSION = process.env.SYNC_CRON_EXPRESSION || '* * * * *';

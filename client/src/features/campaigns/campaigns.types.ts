@@ -8,6 +8,10 @@ export interface Campaign {
   dailyBudget?: number | null;
   startTime?: string | null;
   endTime?: string | null;
+  spend?: number | null;
+  ctr?: number | null;
+  cpm?: number | null;
+  cpa?: number | null;
 }
 
 export interface AdSquad {
@@ -16,6 +20,10 @@ export interface AdSquad {
   status: string;
   dailyBudget?: number | null;
   bidAmount?: number | null;
+  spend?: number | null;
+  ctr?: number | null;
+  cpm?: number | null;
+  cpa?: number | null;
 }
 
 export interface CampaignQuery {
@@ -32,4 +40,8 @@ export interface Ad {
   name: string;
   status: string;
   type?: string | null;
+  spend?: number | null;
+  ctr?: number | null;
+  cpm?: number | null;
+  cpa?: number | null;
 }

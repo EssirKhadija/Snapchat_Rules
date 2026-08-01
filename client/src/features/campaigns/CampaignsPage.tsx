@@ -5,7 +5,6 @@ import { fetchCampaigns, fetchAdSquads, fetchAds } from './campaigns.service';
 import RuleModal from './components/RuleModal';
 import type { Ad } from './campaigns.types';
 import { useTranslation } from '../../shared/lib/i18n';
-import { useNavigate } from 'react-router-dom';
 import { Zap } from 'lucide-react';
 import LaunchCampaignWizard from './launch/LaunchCampaignWizard';
 
@@ -35,34 +34,56 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
+const MetricCell = ({ value, prefix }: { value?: number | null; prefix?: string }) => (
+  <div className="text-sm font-medium text-snap-ink">
+    {value === undefined || value === null ? '—' : `${prefix ?? ''}${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+  </div>
+);
+
+const TableHeader = () => (
+  <div className="grid items-center gap-3 rounded-2xl border border-snap-border bg-snap-card px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-snap-muted sm:grid-cols-[minmax(220px,1.5fr)_110px_90px_90px_90px_90px_120px]">
+    <div>Campaign / Ad Set / Ad</div>
+    <div>Status</div>
+    <div>Spend</div>
+    <div>CTR</div>
+    <div>CPM</div>
+    <div>CPA</div>
+    <div>Règles</div>
+  </div>
+);
+
 const AdRow = ({
   ad,
   onCreateRule,
 }: {
   ad: Ad;
   onCreateRule: (target: { type: 'ad'; id: string; name: string }) => void;
-}) => (
-  <div className="flex items-center justify-between gap-3 rounded-xl border border-snap-border bg-white px-4 py-2.5 transition-colors hover:border-snap-muted">
-    <div className="flex items-center gap-3 min-w-0">
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-snap-border bg-snap-bg">
-        <span className="text-[9px] text-snap-muted">🎯</span>
+}) => {
+  const { t } = useTranslation();
+
+  return (
+    <div className="grid items-center gap-3 rounded-2xl border border-snap-border bg-snap-card px-4 py-3 text-sm text-snap-ink sm:grid-cols-[minmax(220px,1.5fr)_110px_90px_90px_90px_90px_120px]">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-snap-border bg-snap-soft text-[10px] text-snap-muted">Ad</div>
+        <div className="min-w-0">
+          <p className="truncate font-medium">{ad.name}</p>
+          {ad.type && <p className="text-xs text-snap-muted">{ad.type}</p>}
+        </div>
       </div>
-      <div className="min-w-0">
-        <p className="truncate text-xs font-medium text-snap-ink">{ad.name}</p>
-        {ad.type && <p className="text-[10px] text-snap-muted">{ad.type}</p>}
-      </div>
-    </div>
-    <div className="flex items-center gap-2 shrink-0">
       <StatusBadge status={ad.status} />
+      <MetricCell value={ad.spend ?? null} prefix="$" />
+      <MetricCell value={ad.ctr ?? null} />
+      <MetricCell value={ad.cpm ?? null} prefix="$" />
+      <MetricCell value={ad.cpa ?? null} prefix="$" />
       <button
         onClick={() => onCreateRule({ type: 'ad', id: ad.id, name: ad.name })}
-        className="flex items-center gap-1 rounded-lg border border-snap-yellow/30 bg-snap-yellow/10 px-2.5 py-1 text-[10px] font-semibold text-yellow-700 hover:bg-snap-yellow/20 transition-all"
+        className="rounded-xl bg-snap-yellow px-3 py-1.5 text-[11px] font-semibold text-snap-ink hover:brightness-105 transition-all"
       >
-        ⚡
+        {t('campaigns.rule')}
       </button>
     </div>
-  </div>
-);
+  );
+};
 
 const AdSquadRow = ({
   squad,
@@ -156,38 +177,41 @@ const CampaignRow = ({
   });
 
   return (
-    <div className={`rounded-2xl border transition-all duration-200 ${isExpanded ? 'border-snap-yellow/30 bg-snap-yellow/5' : 'border-snap-border bg-snap-card'}`}>
-      <div className="flex items-center gap-3 p-4">
-        <button
-          onClick={onToggle}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-snap-border bg-snap-soft transition-transform duration-200"
-          style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
-        >
-          <span className="text-xs text-snap-muted">▶</span>
-        </button>
-
-        <div className="flex-1 min-w-0">
-          <p className="truncate text-sm font-semibold text-snap-ink">{campaign.name}</p>
-          <p className="mt-0.5 text-xs text-snap-muted">
-            {campaign.objective ?? t('campaigns.objective.none')}
-            {campaign.dailyBudget ? ` · $${campaign.dailyBudget.toFixed(0)}/day` : ''}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <StatusBadge status={campaign.status} />
+    <div className="space-y-2">
+      <div className={`grid items-center gap-3 rounded-2xl border px-4 py-3 transition-all duration-200 ${isExpanded ? 'border-snap-yellow/30 bg-snap-yellow/5' : 'border-snap-border bg-snap-card'} sm:grid-cols-[minmax(240px,1.5fr)_110px_90px_90px_90px_90px_120px]`}>
+        <div className="flex items-center gap-3 min-w-0">
           <button
-            onClick={() => onCreateRule({ type: 'campaign', id: campaign.id, name: campaign.name })}
-            className="flex items-center gap-1.5 rounded-xl bg-snap-yellow px-3 py-1.5 text-[11px] font-semibold text-snap-ink hover:brightness-105 transition-all"
+            onClick={onToggle}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-snap-border bg-snap-soft transition-transform duration-200"
+            style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
           >
-            {t('campaigns.rule')}
+            <span className="text-xs text-snap-muted">▶</span>
           </button>
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-snap-border bg-snap-card text-[10px] text-snap-muted">Campaign</div>
+          <div className="min-w-0">
+            <p className="truncate font-medium text-snap-ink">{campaign.name}</p>
+            <p className="text-xs text-snap-muted">
+              {campaign.objective ?? t('campaigns.objective.none')}
+              {campaign.dailyBudget ? ` · $${campaign.dailyBudget.toFixed(0)}/day` : ''}
+            </p>
+          </div>
         </div>
+        <StatusBadge status={campaign.status} />
+        <MetricCell value={campaign.spend ?? null} prefix="$" />
+        <MetricCell value={campaign.ctr ?? null} />
+        <MetricCell value={campaign.cpm ?? null} prefix="$" />
+        <MetricCell value={campaign.cpa ?? null} prefix="$" />
+        <button
+          onClick={() => onCreateRule({ type: 'campaign', id: campaign.id, name: campaign.name })}
+          className="rounded-xl bg-snap-yellow px-3 py-1.5 text-[11px] font-semibold text-snap-ink hover:brightness-105 transition-all"
+        >
+          {t('campaigns.rule')}
+        </button>
       </div>
 
       {isExpanded && (
-        <div className="border-t border-snap-border/50 px-4 pb-4 pt-3">
-          <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-snap-muted">
+        <div className="space-y-2 rounded-2xl border border-snap-border bg-snap-card p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-snap-muted">
             {t('campaigns.adsets')} ({isLoading ? '...' : adSquads.length})
           </p>
           {isLoading ? (
@@ -210,7 +234,6 @@ const CampaignRow = ({
 };
 
 const CampaignsPage = () => {
-  const navigate = useNavigate();
   const { t } = useTranslation();
   const [query, setQuery] = useState<CampaignQuery>(defaultQuery);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -318,15 +341,20 @@ const CampaignsPage = () => {
             <p className="text-sm text-snap-muted">{t('campaigns.empty')}</p>
           </div>
         ) : (
-          campaigns.map(campaign => (
-            <CampaignRow
-              key={campaign.id}
-              campaign={campaign}
-              isExpanded={expandedIds.has(campaign.id)}
-              onToggle={() => toggleExpand(campaign.id)}
-              onCreateRule={setRuleTarget}
-            />
-          ))
+          <>
+            <TableHeader />
+            <div className="space-y-3">
+              {campaigns.map(campaign => (
+                <CampaignRow
+                  key={campaign.id}
+                  campaign={campaign}
+                  isExpanded={expandedIds.has(campaign.id)}
+                  onToggle={() => toggleExpand(campaign.id)}
+                  onCreateRule={setRuleTarget}
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
 

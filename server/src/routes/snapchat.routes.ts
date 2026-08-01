@@ -51,6 +51,45 @@ router.post('/refresh', authenticate, SnapchatController.refresh);
 
 /**
  * @openapi
+ * /snapchat/pending:
+ *   get:
+ *     summary: Get pending Snapchat Ad Accounts for selection
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Pending Snapchat Ad Accounts
+ */
+router.get('/pending', authenticate, SnapchatController.pending);
+
+/**
+ * @openapi
+ * /snapchat/select:
+ *   post:
+ *     summary: Select the Snapchat Ad Account to connect
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               adAccountId:
+ *                 type: string
+ *               organizationId:
+ *                 type: string
+ *               displayName:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Snapchat account connected
+ */
+router.post('/select', authenticate, SnapchatController.select);
+
+/**
+ * @openapi
  * /snapchat/disconnect:
  *   post:
  *     summary: Disconnect Snapchat account from SnapRules
@@ -63,7 +102,6 @@ router.post('/refresh', authenticate, SnapchatController.refresh);
 router.post('/disconnect', authenticate, SnapchatController.disconnect);
 router.delete('/disconnect', authenticate, SnapchatController.disconnect);
 /**
- * @openapi
  * /snapchat/me:
  *   get:
  *     summary: Get connected Snapchat account details

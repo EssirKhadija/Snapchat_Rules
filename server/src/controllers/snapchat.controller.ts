@@ -1,11 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import {
   getAuthorizationUrl,
-  connectSnapchat,
   disconnectSnapchat,
   getSnapchatAccount,
   getValidAccessToken,
+  getPendingSnapchatAccounts,
+  selectAdAccount,
+  clearPendingSnapchatState,
+  exchangeAndGetAdAccounts,
 } from '../services/snapchat.service';
+import { FRONTEND_URL } from '../config';
 import logger from '../utils/logger';
 
 // GET /api/v1/snapchat/authorize
@@ -48,12 +52,18 @@ export async function callback(req: Request, res: Response, next: NextFunction) 
       return res.status(400).json({ message: 'Missing authorization code in callback' });
     }
 
-    // connectSnapchat gère tout : token exchange + fetch org/ad account + Prisma
-    await connectSnapchat(userId, code);
+    const { adAccounts } = await exchangeAndGetAdAccounts(userId, code);
+    if (adAccounts.length === 0) {
+      return res.status(400).json({ message: 'No Ad Account found' });
+    }
 
-    // En production tu peux rediriger vers le frontend ici :
-    // return res.redirect(`${process.env.FRONTEND_URL}/?snap=connected`);
-    return res.json({ message: 'Snapchat account connected successfully' });
+    if (adAccounts.length === 1) {
+      const first = adAccounts[0];
+      await selectAdAccount(userId, first.id, first.organizationId, first.name);
+      return res.redirect(`${FRONTEND_URL}/dashboard/accounts`);
+    }
+
+    return res.redirect(`${FRONTEND_URL}/dashboard/accounts`);
   } catch (error: any) {
     // Log détaillé pour débugger les erreurs Snapchat API
     logger.error('Snapchat callback error', {
@@ -61,6 +71,24 @@ export async function callback(req: Request, res: Response, next: NextFunction) 
       data: error.response?.data,
       message: error.message,
     });
+    next(error);
+  }
+}
+
+// POST /api/v1/snapchat/select
+// Sélectionne l'Ad Account choisi par l'utilisateur après une connexion OAuth réussie.
+export async function select(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId;
+    const { adAccountId, organizationId, displayName } = req.body;
+    if (!adAccountId || !organizationId || !displayName) {
+      return res.status(400).json({ message: 'Missing adAccountId, organizationId, or displayName' });
+    }
+
+    await selectAdAccount(userId, adAccountId, organizationId, displayName);
+    return res.json({ message: 'Snapchat account connected successfully' });
+  } catch (error) {
+    logger.error('Snapchat select error', { error });
     next(error);
   }
 }
@@ -82,6 +110,22 @@ export async function details(req: Request, res: Response, next: NextFunction) {
     });
   } catch (error) {
     logger.error('Snapchat details error', { error });
+    next(error);
+  }
+}
+
+// GET /api/v1/snapchat/pending
+// Retourne les Ad Accounts trouvés pendant la phase OAuth avant sélection.
+export async function pending(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId;
+    const accounts = await getPendingSnapchatAccounts(userId);
+    if (!accounts) {
+      return res.status(404).json({ message: 'No pending Snapchat connection found' });
+    }
+    return res.json({ accounts });
+  } catch (error) {
+    logger.error('Snapchat pending error', { error });
     next(error);
   }
 }

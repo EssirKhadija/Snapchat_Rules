@@ -43,6 +43,22 @@ export async function getSnapchatAuthorizeUrl(): Promise<string> {
   return url;
 }
 
+export async function fetchSnapchatPendingAccounts(): Promise<Array<{ id: string; name: string; organizationId: string; currency: string; timezone: string;}>> {
+  try {
+    const response = await api.get('/snapchat/pending');
+    return response.data?.accounts ?? [];
+  } catch (error: any) {
+    if (error?.message?.includes('No pending Snapchat connection found') || error?.status === 404) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+export async function selectSnapchatAccount(payload: { adAccountId: string; organizationId: string; displayName: string; }): Promise<void> {
+  await api.post('/snapchat/select', payload);
+}
+
 export async function disconnectSnapchatAccount(): Promise<void> {
   await api.delete('/snapchat/disconnect');
 }

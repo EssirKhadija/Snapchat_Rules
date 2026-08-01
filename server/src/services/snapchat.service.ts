@@ -28,12 +28,21 @@ function decrypt(text: string): string {
 }
 
 // ── Pending tokens (temporaire en mémoire — 10 min) ───────────
-const pendingTokens = new Map<string, {
+type PendingSnapchatState = {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
   expiresAt: number;
-}>();
+  adAccounts: Array<{
+    id: string;
+    name: string;
+    organizationId: string;
+    currency: string;
+    timezone: string;
+  }>;
+};
+
+const pendingTokens = new Map<string, PendingSnapchatState>();
 
 // ── Authorization URL ──────────────────────────────────────────
 export function getAuthorizationUrl(state: string): string {
@@ -72,14 +81,6 @@ export async function exchangeAndGetAdAccounts(userId: string, code: string): Pr
 
   const { access_token, refresh_token, expires_in } = tokenRes.data;
   if (!access_token) throw new Error('Token exchange failed: no access_token');
-
-  // Stocker les tokens temporairement
-  pendingTokens.set(userId, {
-    accessToken: access_token,
-    refreshToken: refresh_token,
-    expiresIn: expires_in ?? 3600,
-    expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
-  });
 
   // Étape 2 : Récupérer toutes les organisations + Ad Accounts
   const orgsRes = await axios.get(
@@ -125,6 +126,15 @@ export async function exchangeAndGetAdAccounts(userId: string, code: string): Pr
       }
     }
   }
+
+  // Stocker les tokens temporairement avec les comptes.
+  pendingTokens.set(userId, {
+    accessToken: access_token,
+    refreshToken: refresh_token,
+    expiresIn: expires_in ?? 3600,
+    expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
+    adAccounts,
+  });
 
   console.log(`✅ Found ${adAccounts.length} Ad Account(s) for user ${userId}`);
   return { adAccounts };
@@ -176,8 +186,12 @@ export async function selectAdAccount(
 export async function connectSnapchat(userId: string, code: string): Promise<void> {
   const { adAccounts } = await exchangeAndGetAdAccounts(userId, code);
   if (adAccounts.length === 0) throw new Error('No Ad Account found');
-  const first = adAccounts[0];
-  await selectAdAccount(userId, first.id, first.organizationId, first.name);
+  if (adAccounts.length === 1) {
+    const first = adAccounts[0];
+    await selectAdAccount(userId, first.id, first.organizationId, first.name);
+    return;
+  }
+  // Si plusieurs comptes sont disponibles, la sélection se fera depuis le frontend.
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -193,6 +207,16 @@ export async function getSnapchatMe(userId: string) {
     externalAccountId: account.externalAccountId,
     organizationId: account.organizationId,
   };
+}
+
+export async function getPendingSnapchatAccounts(userId: string) {
+  const pending = pendingTokens.get(userId);
+  if (!pending) return null;
+  return pending.adAccounts;
+}
+
+export async function clearPendingSnapchatState(userId: string) {
+  pendingTokens.delete(userId);
 }
 
 export async function disconnectSnapchat(userId: string): Promise<void> {
