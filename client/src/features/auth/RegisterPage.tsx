@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { useAuth } from '../../shared/lib/auth';
 import { useTranslation } from '../../shared/lib/i18n';
 import { useNavigate, Link } from 'react-router-dom';
+import { Zap } from 'lucide-react';
 
 const schema = z.object({
   email: z.string().email(),
@@ -25,27 +26,54 @@ const RegisterPage = () => {
   };
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-4">{t('auth.register.title')}</h1>
+    <div className="w-full">
+      <div className="mb-6 text-center">
+        
+        <h1 className="mt-3 font-display text-3xl font-semibold text-snap-ink">{t('auth.register.title')}</h1>
+      </div>
+
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700">{t('auth.register.fullName')}</label>
-          <input type="text" {...register('fullName')} className="mt-1 block w-full rounded-lg border border-slate-300 p-2" />
-          {errors.fullName && <p className="text-red-600 text-sm">{errors.fullName.message}</p>}
+          <label className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.24em] text-snap-muted">{t('auth.register.fullName')}</label>
+          <input
+            type="text"
+            {...register('fullName')}
+            className="block w-full rounded-2xl border border-snap-border bg-snap-soft px-4 py-3 text-sm text-snap-ink placeholder:text-snap-muted transition-all duration-150 focus:border-snap-yellow focus:outline-none focus:ring-2 focus:ring-snap-yellow/25"
+          />
+          {errors.fullName && <p className="mt-1.5 text-xs text-red-500">{errors.fullName.message}</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700">{t('auth.register.email')}</label>
-          <input type="email" {...register('email')} className="mt-1 block w-full rounded-lg border border-slate-300 p-2" />
-          {errors.email && <p className="text-red-600 text-sm">{errors.email.message}</p>}
+          <label className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.24em] text-snap-muted">{t('auth.register.email')}</label>
+          <input
+            type="email"
+            {...register('email')}
+            className="block w-full rounded-2xl border border-snap-border bg-snap-soft px-4 py-3 text-sm text-snap-ink placeholder:text-snap-muted transition-all duration-150 focus:border-snap-yellow focus:outline-none focus:ring-2 focus:ring-snap-yellow/25"
+          />
+          {errors.email && <p className="mt-1.5 text-xs text-red-500">{errors.email.message}</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700">{t('auth.register.password')}</label>
-          <input type="password" {...register('password')} className="mt-1 block w-full rounded-lg border border-slate-300 p-2" />
-          {errors.password && <p className="text-red-600 text-sm">{errors.password.message}</p>}
+          <label className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.24em] text-snap-muted">{t('auth.register.password')}</label>
+          <input
+            type="password"
+            {...register('password')}
+            className="block w-full rounded-2xl border border-snap-border bg-snap-soft px-4 py-3 text-sm text-snap-ink placeholder:text-snap-muted transition-all duration-150 focus:border-snap-yellow focus:outline-none focus:ring-2 focus:ring-snap-yellow/25"
+          />
+          {errors.password && <p className="mt-1.5 text-xs text-red-500">{errors.password.message}</p>}
         </div>
-        <button type="submit" className="w-full rounded-lg bg-slate-900 text-white py-2">{t('auth.register.submit')}</button>
+        <button
+          type="submit"
+          className="w-full rounded-2xl bg-snap-yellow py-3 text-sm font-semibold text-snap-ink transition-all duration-150 hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0"
+        >
+          {t('auth.register.submit')}
+        </button>
       </form>
-      <p className="mt-4 text-sm text-slate-600">{t('auth.register.already')} <Link to="/auth/login" className="text-slate-900">{t('auth.register.login')}</Link></p>
+
+      <p className="mt-6 text-center text-sm text-snap-muted">
+        {t('auth.register.already')}{' '}
+        <Link to="/auth/login" className="font-semibold text-snap-ink transition-colors hover:text-snap-yellow">
+          {t('auth.register.login')}
+        </Link>
+      </p>
     </div>
   );
 };

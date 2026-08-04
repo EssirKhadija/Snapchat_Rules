@@ -68,6 +68,154 @@ export async function fetchAds(userId: string, adSquadId: string) {
   });
 }
 
+// Fetcher les stats pour une liste d'IDs (campagnes ou adsets)
+async function fetchStatsForIds(
+  client: any,
+  level: 'campaigns' | 'adsquads',
+  ids: string[],
+  startDate?: string,
+  endDate?: string
+): Promise<Map<string, { spend: number; impressions: number; swipes: number; conversions: number }>> {
+  const statsMap = new Map();
+  if (ids.length === 0) return statsMap;
+
+  const now = new Date();
+  const fmt = (d: Date) => d.toISOString().split('.')[0] + '+00:00';
+  const todayStr = now.toISOString().split('T')[0];
+
+  const startRaw = startDate
+    ? new Date(startDate + 'T00:00:00Z')
+    : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0));
+  const start = new Date(Date.UTC(startRaw.getUTCFullYear(), startRaw.getUTCMonth(), startRaw.getUTCDate(), 0, 0, 0));
+
+  let endHour: Date;
+  const endDateStr = endDate ?? todayStr;
+  if (endDateStr < todayStr) {
+    const endRaw = new Date(endDateStr + 'T00:00:00Z');
+    endHour = new Date(Date.UTC(endRaw.getUTCFullYear(), endRaw.getUTCMonth(), endRaw.getUTCDate() + 1, 0, 0, 0));
+  } else {
+    endHour = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), 0, 0));
+    if (endHour.getTime() <= start.getTime()) endHour = new Date(endHour.getTime() + 3600 * 1000);
+  }
+
+  const results = await Promise.allSettled(
+    ids.map(id =>
+      client.get(`/${level}/${id}/stats`, {
+        params: {
+          granularity: 'TOTAL',
+          fields: 'impressions,swipes,spend,conversion_purchases',
+          start_time: fmt(start),
+          end_time: fmt(endHour),
+        },
+      })
+    )
+  );
+
+  results.forEach((result, i) => {
+    if (result.status === 'fulfilled') {
+      const stat = result.value.data?.total_stats?.[0]?.total_stat?.stats;
+      if (stat) {
+        const spend = stat.spend ? stat.spend / 1_000_000 : 0;
+        const impressions = stat.impressions ?? 0;
+        const swipes = stat.swipes ?? 0;
+        const conversions = stat.conversion_purchases ?? 0;
+        statsMap.set(ids[i], { spend, impressions, swipes, conversions });
+      }
+    }
+  });
+
+  return statsMap;
+}
+
+// Helper pour calculer CTR, CPM, CPA
+function calcMetrics(spend: number, impressions: number, swipes: number, conversions: number) {
+  const ctr = impressions > 0 ? Number(((swipes / impressions) * 100).toFixed(2)) : 0;
+  const cpm = impressions > 0 ? Number(((spend / impressions) * 1000).toFixed(2)) : 0;
+  const cpc = swipes > 0 ? Number((spend / swipes).toFixed(2)) : 0;
+  const cpa = conversions > 0 ? Number((spend / conversions).toFixed(2)) : 0;
+  return { ctr, cpm, cpc, cpa };
+}
+
+// Campagnes avec stats
+export async function fetchCampaignsWithStats(
+  userId: string,
+  startDate?: string,
+  endDate?: string
+) {
+  const account = await getSnapchatAccount(userId);
+  if (!account) throw new Error('Snapchat account not connected');
+
+  const client = await getAuthorizedAxios(userId);
+  const response = await client.get(`/adaccounts/${account.externalAccountId}/campaigns`);
+  const campaigns: any[] = response.data?.campaigns ?? [];
+
+  const mapped = campaigns.map((item: any) => {
+    const c = item.campaign ?? item;
+    return {
+      id: c.id,
+      name: c.name,
+      status: c.status,
+      objective: c.objective ?? null,
+      dailyBudget: c.daily_budget_micro ? c.daily_budget_micro / 1_000_000 : null,
+      startTime: c.start_time ?? null,
+      endTime: c.end_time ?? null,
+    };
+  });
+
+  // Fetch stats pour toutes les campagnes
+  const statsMap = await fetchStatsForIds(client, 'campaigns', mapped.map(c => c.id), startDate, endDate);
+
+  return mapped.map(c => {
+    const s = statsMap.get(c.id) ?? { spend: 0, impressions: 0, swipes: 0, conversions: 0 };
+    return {
+      ...c,
+      spend: Number(s.spend.toFixed(2)),
+      impressions: s.impressions,
+      swipes: s.swipes,
+      conversions: s.conversions,
+      ...calcMetrics(s.spend, s.impressions, s.swipes, s.conversions),
+    };
+  });
+}
+
+// Ad Squads avec stats
+export async function fetchAdSquadsWithStats(
+  userId: string,
+  campaignId: string,
+  startDate?: string,
+  endDate?: string
+) {
+  const client = await getAuthorizedAxios(userId);
+  const response = await client.get(`/campaigns/${campaignId}/adsquads`);
+  const squads: any[] = response.data?.adsquads ?? [];
+
+  const mapped = squads.map((item: any) => {
+    const s = item.adsquad ?? item;
+    return {
+      id: s.id,
+      name: s.name,
+      status: s.status,
+      dailyBudget: s.daily_budget_micro ? s.daily_budget_micro / 1_000_000 : null,
+      bidAmount: s.bid_micro ? s.bid_micro / 1_000_000 : null,
+      bidStrategy: s.bid_strategy ?? null,
+    };
+  });
+
+  const statsMap = await fetchStatsForIds(client, 'adsquads', mapped.map(s => s.id), startDate, endDate);
+
+  return mapped.map(sq => {
+    const s = statsMap.get(sq.id) ?? { spend: 0, impressions: 0, swipes: 0, conversions: 0 };
+    return {
+      ...sq,
+      spend: Number(s.spend.toFixed(2)),
+      impressions: s.impressions,
+      swipes: s.swipes,
+      conversions: s.conversions,
+      ...calcMetrics(s.spend, s.impressions, s.swipes, s.conversions),
+    };
+  });
+}
+
 export async function getDashboardStats(
   userId: string,
   startDateParam?: string,

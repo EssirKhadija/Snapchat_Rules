@@ -10,6 +10,9 @@ import ProtectedRoute from '../features/layout/ProtectedRoute';
 import HomePage from '../features/home/HomePage';
 import PricingPage from '../features/home/PricingPage';
 import AdAccountsPage from '../features/dashboard/AdAccountsPage';
+import AdSetsPage from '../features/campaigns/AdSetsPage';
+import AdsPage from '../features/campaigns/AdsPage';
+
 function App() {
   return (
     <Routes>
@@ -25,6 +28,9 @@ function App() {
         <Route path="accounts" element={<AdAccountsPage />} />
         <Route path="campaigns" element={<CampaignsPage />} />
         <Route path="rules/builder" element={<RuleBuilderPage />} />
+        <Route path="campaigns" element={<CampaignsPage />} />
+        <Route path="adsets/:campaignId" element={<AdSetsPage />} />
+        <Route path="ads/:adSquadId" element={<AdsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/auth/login" replace />} />
